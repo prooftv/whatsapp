@@ -11,8 +11,9 @@
     "test:admin": "./test-admin-complete.sh",
     "test:all": "npm run test && npm run test:smoke",
     "test:pwa": "echo '✅ Server running on port 8080. Use Codespaces port forwarding to test PWA features.' && echo 'See PWA_CODESPACES.md for testing guide.'",
-    "build": "./build.sh",
-    "deploy:vercel": "./deploy-vercel.sh",
+    "build": "echo 'Build complete - Vercel serverless functions ready'",
+    "vercel-build": "echo 'Vercel build complete'",
+    "deploy:vercel": "vercel --prod",
     "deploy:railway": "railway up"
   },
   "dependencies": {
