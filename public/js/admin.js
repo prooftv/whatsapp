@@ -9,7 +9,9 @@ function showSection(sectionId) {
     document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
     document.getElementById(sectionId).classList.add('active');
-    document.querySelector(`[data-section="${sectionId}"]`).classList.add('active');
+    
+    const navButton = document.querySelector(`[data-section="${sectionId}"]`);
+    if (navButton) navButton.classList.add('active');
     
     // Load data for section
     switch(sectionId) {
@@ -24,45 +26,90 @@ function showSection(sectionId) {
     }
 }
 
-// Event listeners for navigation
-document.addEventListener('DOMContentLoaded', () => {
-    // Navigation buttons
-    document.querySelectorAll('[data-section]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            showSection(e.target.dataset.section);
-        });
-    });
-
-    // Filter selects
-    document.querySelectorAll('[data-filter]').forEach(select => {
-        select.addEventListener('change', filterMoments);
-    });
-
-    // Search box
-    document.querySelector('[data-search]').addEventListener('input', filterMoments);
-
-    // Action buttons
-    document.querySelector('[data-action="create-moment"]')?.addEventListener('click', () => {
-        showSection('create');
-    });
-
-    // Initialize app
-    loadAnalytics();
-    loadRecentActivity();
-    loadSponsors();
-    loadSettings();
+// Event delegation for all interactions
+document.addEventListener('click', (e) => {
+    const action = e.target.getAttribute('data-action');
+    const section = e.target.getAttribute('data-section');
+    const filter = e.target.getAttribute('data-filter');
     
-    // Load and apply logo from settings
-    fetch(`${API_BASE}/admin/settings`)
-        .then(response => response.json())
-        .then(data => {
-            const logoSetting = data.settings?.find(s => s.setting_key === 'app_logo');
-            if (logoSetting && logoSetting.setting_value) {
-                updateHeaderLogo(logoSetting.setting_value);
-            }
-        })
-        .catch(console.error);
+    if (section) {
+        showSection(section);
+    } else if (action) {
+        handleAction(action, e.target);
+    }
 });
+
+document.addEventListener('change', (e) => {
+    const filter = e.target.getAttribute('data-filter');
+    if (filter === 'status' || filter === 'region' || filter === 'category') {
+        filterMoments();
+    } else if (filter === 'moderation') {
+        loadModeration();
+    } else if (filter === 'subscribers') {
+        loadSubscribers();
+    }
+});
+
+document.addEventListener('input', (e) => {
+    const search = e.target.getAttribute('data-search');
+    if (search === 'moments') {
+        filterMoments();
+    }
+    if (e.target.name === 'content') {
+        updateCharCount();
+    }
+});
+
+function handleAction(action, element) {
+    const id = element.getAttribute('data-id');
+    const key = element.getAttribute('data-key');
+    const value = element.getAttribute('data-value');
+    const type = element.getAttribute('data-type');
+    
+    switch(action) {
+        case 'create-moment':
+            showSection('create');
+            break;
+        case 'back-to-moments':
+            showSection('moments');
+            break;
+        case 'reset-form':
+            resetForm();
+            break;
+        case 'new-sponsor':
+            openSponsorModal();
+            break;
+        case 'close-sponsor-modal':
+        case 'cancel-sponsor':
+            closeSponsorModal();
+            break;
+        case 'close-confirm-modal':
+        case 'cancel-confirm':
+            closeConfirmModal();
+            break;
+        case 'confirm-action':
+            confirmAction();
+            break;
+        case 'broadcast':
+            broadcastMoment(id);
+            break;
+        case 'edit':
+            editMoment(id);
+            break;
+        case 'delete':
+            deleteMoment(id);
+            break;
+        case 'edit-sponsor':
+            editSponsor(id);
+            break;
+        case 'delete-sponsor':
+            deleteSponsor(id);
+            break;
+        case 'edit-setting':
+            editSetting(key, value, type);
+            break;
+    }
+}
 
 // Load analytics
 async function loadAnalytics() {
@@ -131,10 +178,10 @@ async function loadMoments(page = 1) {
 }
 
 function filterMoments() {
-    const statusFilter = document.getElementById('status-filter').value;
-    const regionFilter = document.getElementById('region-filter').value;
-    const categoryFilter = document.getElementById('category-filter').value;
-    const searchTerm = document.getElementById('search-box').value.toLowerCase();
+    const statusFilter = document.getElementById('status-filter')?.value || '';
+    const regionFilter = document.getElementById('region-filter')?.value || '';
+    const categoryFilter = document.getElementById('category-filter')?.value || '';
+    const searchTerm = document.getElementById('search-box')?.value.toLowerCase() || '';
 
     filteredMoments = allMoments.filter(moment => {
         const matchesStatus = !statusFilter || moment.status === statusFilter;
@@ -156,7 +203,7 @@ function displayMoments() {
             <div class="empty-state">
                 <div class="empty-state-icon">📝</div>
                 <div>No moments found</div>
-                <button class="btn" onclick="showSection('create')" style="margin-top: 1rem;">Create First Moment</button>
+                <button class="btn" data-section="create" style="margin-top: 1rem;">Create First Moment</button>
             </div>
         `;
         return;
@@ -174,9 +221,9 @@ function displayMoments() {
                 </div>
                 <div class="moment-actions">
                     <span class="status-badge status-${moment.status}">${moment.status}</span>
-                    ${moment.status === 'draft' ? `<button class="btn btn-sm btn-success" data-broadcast="${moment.id}">Broadcast</button>` : ''}
-                    ${moment.status !== 'broadcasted' ? `<button class="btn btn-sm" data-edit="${moment.id}">Edit</button>` : ''}
-                    <button class="btn btn-sm btn-danger" data-delete="${moment.id}">Delete</button>
+                    ${moment.status === 'draft' ? `<button class="btn btn-sm btn-success" data-action="broadcast" data-id="${moment.id}">Broadcast</button>` : ''}
+                    ${moment.status !== 'broadcasted' ? `<button class="btn btn-sm" data-action="edit" data-id="${moment.id}">Edit</button>` : ''}
+                    <button class="btn btn-sm btn-danger" data-action="delete" data-id="${moment.id}">Delete</button>
                 </div>
             </div>
             <div class="moment-content">${moment.content.substring(0, 200)}${moment.content.length > 200 ? '...' : ''}</div>
@@ -185,16 +232,74 @@ function displayMoments() {
     `).join('');
     
     document.getElementById('moments-list').innerHTML = html;
+}
 
-    // Add event listeners for moment actions
-    document.querySelectorAll('[data-broadcast]').forEach(btn => {
-        btn.addEventListener('click', (e) => broadcastMoment(e.target.dataset.broadcast));
+// Edit moment
+async function editMoment(id) {
+    const moment = allMoments.find(m => m.id === id);
+    if (!moment) return;
+
+    // Populate form
+    document.getElementById('edit-id').value = id;
+    document.querySelector('[name="title"]').value = moment.title;
+    document.querySelector('[name="content"]').value = moment.content;
+    document.querySelector('[name="region"]').value = moment.region;
+    document.querySelector('[name="category"]').value = moment.category;
+    document.querySelector('[name="sponsor_id"]').value = moment.sponsor_id || '';
+    document.querySelector('[name="pwa_link"]').value = moment.pwa_link || '';
+    if (moment.scheduled_at) {
+        const date = new Date(moment.scheduled_at);
+        document.querySelector('[name="scheduled_at"]').value = date.toISOString().slice(0, 16);
+    }
+
+    // Update UI
+    document.getElementById('create-title').textContent = 'Edit Moment';
+    document.getElementById('submit-btn').textContent = 'Update Moment';
+    updateCharCount();
+    showSection('create');
+}
+
+// Delete moment
+function deleteMoment(id) {
+    const moment = allMoments.find(m => m.id === id);
+    showConfirm(`Delete "${moment.title}"?`, async () => {
+        try {
+            const response = await fetch(`${API_BASE}/admin/moments/${id}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                showSuccess('Moment deleted successfully');
+                loadMoments(currentPage);
+            } else {
+                const error = await response.json();
+                showError(error.error || 'Failed to delete moment');
+            }
+        } catch (error) {
+            showError('Failed to delete moment');
+        }
     });
-    document.querySelectorAll('[data-edit]').forEach(btn => {
-        btn.addEventListener('click', (e) => editMoment(e.target.dataset.edit));
-    });
-    document.querySelectorAll('[data-delete]').forEach(btn => {
-        btn.addEventListener('click', (e) => deleteMoment(e.target.dataset.delete));
+}
+
+// Broadcast moment
+async function broadcastMoment(momentId) {
+    showConfirm('Broadcast this moment now?', async () => {
+        try {
+            const response = await fetch(`${API_BASE}/admin/moments/${momentId}/broadcast`, {
+                method: 'POST'
+            });
+            
+            if (response.ok) {
+                showSuccess('Moment broadcasted successfully!');
+                loadMoments(currentPage);
+                loadAnalytics();
+            } else {
+                const error = await response.json();
+                showError(error.error || 'Failed to broadcast moment');
+            }
+        } catch (error) {
+            showError('Failed to broadcast moment');
+        }
     });
 }
 
@@ -212,47 +317,214 @@ async function loadSponsors() {
         }
         
         // Show sponsors list
-        if (data.sponsors && data.sponsors.length > 0) {
-            const html = data.sponsors.map(sponsor => `
-                <div class="moment-item">
-                    <div class="moment-header">
-                        <div class="moment-info">
-                            <div class="moment-title">${sponsor.display_name}</div>
-                            <div class="moment-meta">${sponsor.name} • ${sponsor.contact_email || 'No email'}</div>
+        const sponsorsList = document.getElementById('sponsors-list');
+        if (sponsorsList) {
+            if (data.sponsors && data.sponsors.length > 0) {
+                const html = data.sponsors.map(sponsor => `
+                    <div class="moment-item">
+                        <div class="moment-header">
+                            <div class="moment-info">
+                                <div class="moment-title">${sponsor.display_name}</div>
+                                <div class="moment-meta">${sponsor.name} • ${sponsor.contact_email || 'No email'}</div>
+                            </div>
+                            <div class="moment-actions">
+                                <button class="btn btn-sm" data-action="edit-sponsor" data-id="${sponsor.id}">Edit</button>
+                                <button class="btn btn-sm btn-danger" data-action="delete-sponsor" data-id="${sponsor.id}">Delete</button>
+                            </div>
                         </div>
-                        <div class="moment-actions">
-                            <button class="btn btn-sm" data-edit-sponsor="${sponsor.id}">Edit</button>
-                            <button class="btn btn-sm btn-danger" data-delete-sponsor="${sponsor.id}">Delete</button>
-                        </div>
+                        ${sponsor.website_url ? `<div style="font-size: 0.875rem; color: #2563eb;"><a href="${sponsor.website_url}" target="_blank">${sponsor.website_url}</a></div>` : ''}
                     </div>
-                    ${sponsor.website_url ? `<div style="font-size: 0.875rem; color: #2563eb;"><a href="${sponsor.website_url}" target="_blank">${sponsor.website_url}</a></div>` : ''}
-                </div>
-            `).join('');
-            document.getElementById('sponsors-list').innerHTML = html;
-
-            // Add event listeners
-            document.querySelectorAll('[data-edit-sponsor]').forEach(btn => {
-                btn.addEventListener('click', (e) => editSponsor(e.target.dataset.editSponsor));
-            });
-            document.querySelectorAll('[data-delete-sponsor]').forEach(btn => {
-                btn.addEventListener('click', (e) => deleteSponsor(e.target.dataset.deleteSponsor));
-            });
-        } else {
-            document.getElementById('sponsors-list').innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">🏢</div>
-                    <div>No sponsors found</div>
-                    <button class="btn" data-new-sponsor style="margin-top: 1rem;">Add First Sponsor</button>
-                </div>
-            `;
-            document.querySelector('[data-new-sponsor]')?.addEventListener('click', openSponsorModal);
+                `).join('');
+                sponsorsList.innerHTML = html;
+            } else {
+                sponsorsList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🏢</div>
+                        <div>No sponsors found</div>
+                        <button class="btn" data-action="new-sponsor" style="margin-top: 1rem;">Add First Sponsor</button>
+                    </div>
+                `;
+            }
         }
     } catch (error) {
-        document.getElementById('sponsors-list').innerHTML = '<div class="error">Failed to load sponsors</div>';
+        const sponsorsList = document.getElementById('sponsors-list');
+        if (sponsorsList) {
+            sponsorsList.innerHTML = '<div class="error">Failed to load sponsors</div>';
+        }
     }
 }
 
-// Load settings
+// Sponsor modal functions
+function openSponsorModal(id = null) {
+    if (id) {
+        document.getElementById('sponsor-modal-title').textContent = 'Edit Sponsor';
+        document.getElementById('sponsor-submit-btn').textContent = 'Update Sponsor';
+    } else {
+        document.getElementById('sponsor-form').reset();
+        document.getElementById('sponsor-modal-title').textContent = 'Create Sponsor';
+        document.getElementById('sponsor-submit-btn').textContent = 'Create Sponsor';
+    }
+    document.getElementById('sponsor-modal').classList.add('active');
+}
+
+function closeSponsorModal() {
+    document.getElementById('sponsor-modal').classList.remove('active');
+    document.getElementById('sponsor-form').reset();
+    document.getElementById('sponsor-message').innerHTML = '';
+}
+
+function editSponsor(id) {
+    openSponsorModal(id);
+}
+
+function deleteSponsor(id) {
+    showConfirm('Delete this sponsor?', async () => {
+        try {
+            const response = await fetch(`${API_BASE}/admin/sponsors/${id}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                showSuccess('Sponsor deleted successfully');
+                loadSponsors();
+            } else {
+                showError('Failed to delete sponsor');
+            }
+        } catch (error) {
+            showError('Failed to delete sponsor');
+        }
+    });
+}
+
+// Load broadcasts
+async function loadBroadcasts() {
+    try {
+        const response = await fetch(`${API_BASE}/admin/broadcasts`);
+        const data = await response.json();
+        
+        if (data.broadcasts && data.broadcasts.length > 0) {
+            const html = data.broadcasts.map(broadcast => `
+                <div class="moment-item">
+                    <div class="moment-header">
+                        <div class="moment-info">
+                            <div class="moment-title">Broadcast #${broadcast.id.slice(0, 8)}</div>
+                            <div class="moment-meta">
+                                ${new Date(broadcast.broadcast_started_at).toLocaleString()}
+                                ${broadcast.broadcast_completed_at ? ` - ${new Date(broadcast.broadcast_completed_at).toLocaleString()}` : ''}
+                            </div>
+                        </div>
+                        <div class="moment-actions">
+                            <span class="status-badge status-${broadcast.status}">${broadcast.status}</span>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 1rem; margin-top: 0.5rem;">
+                        <div><strong>${broadcast.recipient_count}</strong><br><small>Recipients</small></div>
+                        <div><strong>${broadcast.success_count}</strong><br><small>Success</small></div>
+                        <div><strong>${broadcast.failure_count}</strong><br><small>Failed</small></div>
+                        <div><strong>${broadcast.recipient_count > 0 ? Math.round(broadcast.success_count / broadcast.recipient_count * 100) : 0}%</strong><br><small>Success Rate</small></div>
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('broadcasts-list').innerHTML = html;
+        } else {
+            document.getElementById('broadcasts-list').innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📡</div>
+                    <div>No broadcasts yet</div>
+                </div>
+            `;
+        }
+    } catch (error) {
+        document.getElementById('broadcasts-list').innerHTML = '<div class="error">Failed to load broadcasts</div>';
+    }
+}
+
+// Load moderation queue
+async function loadModeration() {
+    try {
+        const filter = document.getElementById('moderation-filter')?.value || 'all';
+        const response = await fetch(`${API_BASE}/admin/moderation?filter=${filter}`);
+        const data = await response.json();
+        
+        if (data.flaggedMessages && data.flaggedMessages.length > 0) {
+            const html = data.flaggedMessages.map(msg => `
+                <div class="moment-item">
+                    <div class="moment-header">
+                        <div class="moment-info">
+                            <div class="moment-title">Message from ${msg.from_number.replace(/\d(?=\d{4})/g, '*')}</div>
+                            <div class="moment-meta">${new Date(msg.created_at).toLocaleString()}</div>
+                        </div>
+                        <div class="moment-actions">
+                            <button class="btn btn-sm btn-success">Approve</button>
+                            <button class="btn btn-sm btn-danger">Flag</button>
+                        </div>
+                    </div>
+                    <div class="moment-content">${msg.content}</div>
+                    <div style="margin-top: 0.75rem; font-size: 0.75rem; color: #dc2626;">
+                        Flagged: ${msg.advisories?.map(a => `${a.advisory_type} (${Math.round(a.confidence * 100)}%)`).join(', ')}
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('moderation-list').innerHTML = html;
+        } else {
+            document.getElementById('moderation-list').innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">✅</div>
+                    <div>No flagged content</div>
+                    <div style="font-size: 0.875rem; color: #6b7280; margin-top: 0.5rem;">All content is clean!</div>
+                </div>
+            `;
+        }
+    } catch (error) {
+        document.getElementById('moderation-list').innerHTML = '<div class="error">Failed to load moderation queue</div>';
+    }
+}
+
+// Load subscribers
+async function loadSubscribers() {
+    try {
+        const filter = document.getElementById('subscriber-filter')?.value || 'all';
+        const response = await fetch(`${API_BASE}/admin/subscribers?filter=${filter}`);
+        const data = await response.json();
+        
+        if (data.subscribers && data.subscribers.length > 0) {
+            const html = data.subscribers.map(sub => `
+                <div class="moment-item">
+                    <div class="moment-header">
+                        <div class="moment-info">
+                            <div class="moment-title">${sub.phone_number.replace(/\d(?=\d{4})/g, '*')}</div>
+                            <div class="moment-meta">
+                                Joined: ${new Date(sub.opted_in_at).toLocaleDateString()}
+                                • Last active: ${new Date(sub.last_activity).toLocaleDateString()}
+                            </div>
+                        </div>
+                        <div class="moment-actions">
+                            <span class="status-badge ${sub.opted_in ? 'status-broadcasted' : 'status-cancelled'}">
+                                ${sub.opted_in ? 'Active' : 'Opted Out'}
+                            </span>
+                        </div>
+                    </div>
+                    <div style="font-size: 0.875rem; color: #6b7280;">
+                        Regions: ${sub.regions?.join(', ') || 'All'} • 
+                        Categories: ${sub.categories?.join(', ') || 'All'}
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('subscribers-list').innerHTML = html;
+        } else {
+            document.getElementById('subscribers-list').innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📱</div>
+                    <div>No subscribers found</div>
+                </div>
+            `;
+        }
+    } catch (error) {
+        document.getElementById('subscribers-list').innerHTML = '<div class="error">Failed to load subscribers</div>';
+    }
+}
+
+// Load system settings
 async function loadSettings() {
     try {
         const response = await fetch(`${API_BASE}/admin/settings`);
@@ -263,11 +535,11 @@ async function loadSettings() {
                 <div class="moment-item">
                     <div class="moment-header">
                         <div class="moment-info">
-                            <div class="moment-title">${setting.setting_key.replace(/_/g, ' ').replace(/\\b\\w/g, l => l.toUpperCase())}</div>
+                            <div class="moment-title">${setting.setting_key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</div>
                             <div class="moment-meta">${setting.description || 'No description'}</div>
                         </div>
                         <div class="moment-actions">
-                            <button class="btn btn-sm" data-edit-setting="${setting.setting_key}" data-setting-value="${setting.setting_value}" data-setting-type="${setting.setting_type}">Edit</button>
+                            <button class="btn btn-sm" data-action="edit-setting" data-key="${setting.setting_key}" data-value="${setting.setting_value}" data-type="${setting.setting_type}">Edit</button>
                         </div>
                     </div>
                     <div class="moment-content">
@@ -279,39 +551,28 @@ async function loadSettings() {
                 </div>
             `).join('');
             document.getElementById('settings-list').innerHTML = html;
-
-            // Add event listeners for settings
-            document.querySelectorAll('[data-edit-setting]').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const key = e.target.dataset.editSetting;
-                    const value = e.target.dataset.settingValue;
-                    const type = e.target.dataset.settingType;
-                    editSetting(key, value, type);
-                });
-            });
+        } else {
+            document.getElementById('settings-list').innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">⚙️</div>
+                    <div>No settings found</div>
+                </div>
+            `;
         }
     } catch (error) {
         document.getElementById('settings-list').innerHTML = '<div class="error">Failed to load settings</div>';
     }
 }
 
-// Placeholder functions for other features
-function loadBroadcasts() { console.log('Load broadcasts'); }
-function loadModeration() { console.log('Load moderation'); }
-function loadSubscribers() { console.log('Load subscribers'); }
-function editMoment(id) { console.log('Edit moment', id); }
-function deleteMoment(id) { console.log('Delete moment', id); }
-function broadcastMoment(id) { console.log('Broadcast moment', id); }
-function editSponsor(id) { console.log('Edit sponsor', id); }
-function deleteSponsor(id) { console.log('Delete sponsor', id); }
-function openSponsorModal() { console.log('Open sponsor modal'); }
-function editSetting(key, value, type) { 
-    const newValue = prompt(`Edit ${key.replace(/_/g, ' ')}:`, value);
-    if (newValue !== null && newValue !== value) {
+// Edit setting
+function editSetting(key, currentValue, type) {
+    const newValue = prompt(`Edit ${key.replace(/_/g, ' ')}:`, currentValue);
+    if (newValue !== null && newValue !== currentValue) {
         updateSetting(key, newValue);
     }
 }
 
+// Update setting
 async function updateSetting(key, value) {
     try {
         const response = await fetch(`${API_BASE}/admin/settings/${key}`, {
@@ -335,6 +596,7 @@ async function updateSetting(key, value) {
     }
 }
 
+// Update header logo
 function updateHeaderLogo(logoUrl) {
     const header = document.querySelector('.header h1');
     if (logoUrl && logoUrl.includes('.png')) {
@@ -342,6 +604,44 @@ function updateHeaderLogo(logoUrl) {
     }
 }
 
+// Form handling
+function resetForm() {
+    document.getElementById('create-form').reset();
+    document.getElementById('edit-id').value = '';
+    document.getElementById('create-title').textContent = 'Create New Moment';
+    document.getElementById('submit-btn').textContent = 'Create Moment';
+    document.getElementById('create-message').innerHTML = '';
+    updateCharCount();
+}
+
+function updateCharCount() {
+    const content = document.querySelector('[name="content"]');
+    const charCount = document.getElementById('char-count');
+    if (content && charCount) {
+        charCount.textContent = content.value.length;
+    }
+}
+
+// Modal functions
+function showConfirm(message, callback) {
+    document.getElementById('confirm-message').textContent = message;
+    confirmCallback = callback;
+    document.getElementById('confirm-modal').classList.add('active');
+}
+
+function closeConfirmModal() {
+    document.getElementById('confirm-modal').classList.remove('active');
+    confirmCallback = null;
+}
+
+function confirmAction() {
+    if (confirmCallback) {
+        confirmCallback();
+        closeConfirmModal();
+    }
+}
+
+// Notification functions
 function showSuccess(message) {
     showNotification(message, 'success');
 }
@@ -374,6 +674,118 @@ function showNotification(message, type) {
     }, 3000);
 }
 
+// Add CSS animations
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+    }
+    .notification {
+        max-width: 300px;
+        word-wrap: break-word;
+    }
+`;
+document.head.appendChild(style);
+
+// Form submission handlers
+document.addEventListener('DOMContentLoaded', () => {
+    // Create form handler
+    const createForm = document.getElementById('create-form');
+    if (createForm) {
+        createForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            const isEdit = !!data.id;
+            
+            data.is_sponsored = !!data.sponsor_id;
+            
+            Object.keys(data).forEach(key => {
+                if (data[key] === '') delete data[key];
+            });
+            
+            try {
+                const url = isEdit ? `${API_BASE}/admin/moments/${data.id}` : `${API_BASE}/admin/moments`;
+                const method = isEdit ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    showSuccess(`Moment ${isEdit ? 'updated' : 'created'} successfully!`);
+                    resetForm();
+                    loadMoments();
+                } else {
+                    const error = await response.json();
+                    showError(error.error || `Failed to ${isEdit ? 'update' : 'create'} moment`);
+                }
+            } catch (error) {
+                showError(`Failed to ${isEdit ? 'update' : 'create'} moment`);
+            }
+        });
+    }
+
+    // Sponsor form handler
+    const sponsorForm = document.getElementById('sponsor-form');
+    if (sponsorForm) {
+        sponsorForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            const isEdit = !!data.id;
+            
+            try {
+                const url = isEdit ? `${API_BASE}/admin/sponsors/${data.id}` : `${API_BASE}/admin/sponsors`;
+                const method = isEdit ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    showSuccess(`Sponsor ${isEdit ? 'updated' : 'created'} successfully!`);
+                    closeSponsorModal();
+                    loadSponsors();
+                } else {
+                    const error = await response.json();
+                    document.getElementById('sponsor-message').innerHTML = `<div class="error">${error.error}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('sponsor-message').innerHTML = '<div class="error">Failed to save sponsor</div>';
+            }
+        });
+    }
+
+    // Initialize app
+    loadAnalytics();
+    loadRecentActivity();
+    loadSponsors();
+    loadSettings();
+    
+    // Load and apply logo from settings
+    fetch(`${API_BASE}/admin/settings`)
+        .then(response => response.json())
+        .then(data => {
+            const logoSetting = data.settings?.find(s => s.setting_key === 'app_logo');
+            if (logoSetting && logoSetting.setting_value) {
+                updateHeaderLogo(logoSetting.setting_value);
+            }
+        })
+        .catch(console.error);
+});
+
 // Service Worker for PWA
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js')
@@ -384,3 +796,26 @@ if ('serviceWorker' in navigator) {
             console.log('PWA: Service Worker registration failed', error);
         });
 }
+
+// PWA install prompt
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    console.log('PWA: Install prompt available');
+    
+    const installBtn = document.createElement('button');
+    installBtn.textContent = '📱 Install App';
+    installBtn.className = 'btn btn-sm';
+    installBtn.style.cssText = 'position: fixed; top: 10px; right: 10px; z-index: 1000;';
+    installBtn.addEventListener('click', async () => {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const result = await deferredPrompt.userChoice;
+            console.log('PWA: Install result', result);
+            deferredPrompt = null;
+            installBtn.remove();
+        }
+    });
+    document.body.appendChild(installBtn);
+});
