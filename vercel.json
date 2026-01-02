@@ -3,7 +3,7 @@
   "name": "unami-moments-admin",
   "builds": [
     {
-      "src": "src/server.js",
+      "src": "api/server.js",
       "use": "@vercel/node"
     },
     {
@@ -14,30 +14,34 @@
   "routes": [
     {
       "src": "/admin/(.*)",
-      "dest": "/src/server.js"
+      "dest": "/api/server.js"
     },
     {
       "src": "/webhook",
-      "dest": "/src/server.js"
+      "dest": "/api/server.js"
     },
     {
       "src": "/health",
-      "dest": "/src/server.js"
+      "dest": "/api/server.js"
     },
     {
       "src": "/test-(.*)",
-      "dest": "/src/server.js"
+      "dest": "/api/server.js"
+    },
+    {
+      "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot))",
+      "dest": "/public/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "/public/$1"
+      "dest": "/public/index.html"
     }
   ],
   "env": {
     "NODE_ENV": "production"
   },
   "functions": {
-    "src/server.js": {
+    "api/server.js": {
       "maxDuration": 30
     }
   }
