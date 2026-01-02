@@ -88,14 +88,14 @@
         <div class="container">
             <h1>📢 Unami Foundation Moments</h1>
             <div class="nav">
-                <button onclick="showSection('dashboard')" class="active">Dashboard</button>
-                <button onclick="showSection('moments')">Moments</button>
-                <button onclick="showSection('create')">Create</button>
-                <button onclick="showSection('sponsors')">Sponsors</button>
-                <button onclick="showSection('broadcasts')">Broadcasts</button>
-                <button onclick="showSection('moderation')">Moderation</button>
-                <button onclick="showSection('subscribers')">Subscribers</button>
-                <button onclick="showSection('settings')">Settings</button>
+                <button data-section="dashboard" class="active">Dashboard</button>
+                <button data-section="moments">Moments</button>
+                <button data-section="create">Create</button>
+                <button data-section="sponsors">Sponsors</button>
+                <button data-section="broadcasts">Broadcasts</button>
+                <button data-section="moderation">Moderation</button>
+                <button data-section="subscribers">Subscribers</button>
+                <button data-section="settings">Settings</button>
             </div>
         </div>
     </div>
@@ -122,17 +122,17 @@
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
                     <h2>All Moments</h2>
-                    <button class="btn" onclick="showSection('create')">+ New Moment</button>
+                    <button class="btn" data-action="create-moment">+ New Moment</button>
                 </div>
                 <div class="filters">
-                    <select class="filter-select" id="status-filter" onchange="filterMoments()">
+                    <select class="filter-select" id="status-filter" data-filter="status">
                         <option value="">All Status</option>
                         <option value="draft">Draft</option>
                         <option value="scheduled">Scheduled</option>
                         <option value="broadcasted">Broadcasted</option>
                         <option value="cancelled">Cancelled</option>
                     </select>
-                    <select class="filter-select" id="region-filter" onchange="filterMoments()">
+                    <select class="filter-select" id="region-filter" data-filter="region">
                         <option value="">All Regions</option>
                         <option value="KZN">KwaZulu-Natal</option>
                         <option value="WC">Western Cape</option>
@@ -144,7 +144,7 @@
                         <option value="NC">Northern Cape</option>
                         <option value="NW">North West</option>
                     </select>
-                    <select class="filter-select" id="category-filter" onchange="filterMoments()">
+                    <select class="filter-select" id="category-filter" data-filter="category">
                         <option value="">All Categories</option>
                         <option value="Education">Education</option>
                         <option value="Safety">Safety</option>
@@ -155,7 +155,7 @@
                         <option value="Technology">Technology</option>
                     </select>
                 </div>
-                <input type="text" class="search-box" id="search-box" placeholder="Search moments..." oninput="filterMoments()">
+                <input type="text" class="search-box" id="search-box" placeholder="Search moments..." data-search="moments">
                 <div id="moments-list">
                     <div class="loading">Loading moments...</div>
                 </div>
