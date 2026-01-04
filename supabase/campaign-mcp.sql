@@ -1,4 +1,5 @@
 -- Campaign MCP Integration Schema
+-- Run this after campaigns.sql
 
 -- Campaign advisories table for MCP screening
 CREATE TABLE IF NOT EXISTS campaign_advisories (

@@ -1,45 +1,50 @@
--- Campaigns table for sponsored content management
+-- Campaigns Table Schema
+-- Run this before campaign-mcp.sql
 
-CREATE TABLE IF NOT EXISTS public.campaigns (
-  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  title text NOT NULL,
-  content text NOT NULL,
-  sponsor_id uuid,
-  budget numeric DEFAULT 0,
-  target_regions text[] DEFAULT '{}',
-  target_categories text[] DEFAULT '{}',
-  media_urls text[] DEFAULT '{}',
-  scheduled_at timestamptz,
-  created_by uuid,
-  status text DEFAULT 'draft' CHECK (status IN ('draft','pending_review','approved','scheduled','published','rejected')),
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
+-- Campaigns table for sponsored content workflow
+CREATE TABLE IF NOT EXISTS campaigns (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  sponsor_id UUID REFERENCES sponsors(id),
+  budget DECIMAL(10,2) DEFAULT 0,
+  target_regions TEXT[] DEFAULT '{}',
+  target_categories TEXT[] DEFAULT '{}',
+  media_urls TEXT[] DEFAULT '{}',
+  scheduled_at TIMESTAMPTZ,
+  status TEXT DEFAULT 'pending_review' CHECK (status IN ('pending_review', 'approved', 'published', 'rejected')),
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Indexes
-CREATE INDEX IF NOT EXISTS idx_campaigns_sponsor ON public.campaigns (sponsor_id);
-CREATE INDEX IF NOT EXISTS idx_campaigns_status ON public.campaigns (status);
+-- Indexes for campaigns
+CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
+CREATE INDEX IF NOT EXISTS idx_campaigns_sponsor_id ON campaigns(sponsor_id);
+CREATE INDEX IF NOT EXISTS idx_campaigns_scheduled ON campaigns(scheduled_at) WHERE scheduled_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_campaigns_created_at ON campaigns(created_at DESC);
 
--- Basic policy: only admins/editors can modify (example)
-DO $$
+-- RLS policies for campaigns
+ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin view campaigns" ON campaigns
+  FOR SELECT USING (check_admin_role('moderator'));
+
+CREATE POLICY "Admin manage campaigns" ON campaigns
+  FOR ALL USING (check_admin_role('content_admin'));
+
+-- Update trigger for campaigns
+CREATE OR REPLACE FUNCTION update_campaigns_updated_at()
+RETURNS TRIGGER AS $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'campaigns') THEN
-    EXECUTE 'ALTER TABLE public.campaigns ENABLE ROW LEVEL SECURITY';
-    EXECUTE $$
-    CREATE POLICY IF NOT EXISTS "admins_edit_campaigns"
-      ON public.campaigns
-      FOR ALL
-      USING (
-        EXISTS (
-          SELECT 1 FROM public.admin_roles ar WHERE ar.user_id::text = auth.uid() AND ar.role IN (''editor'',''admin'',''superadmin'')
-        )
-      )
-      WITH CHECK (
-        EXISTS (
-          SELECT 1 FROM public.admin_roles ar WHERE ar.user_id::text = auth.uid() AND ar.role IN (''editor'',''admin'',''superadmin'')
-        )
-      );
-    $$;
-  END IF;
-END
-$$;
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_campaigns_updated_at
+  BEFORE UPDATE ON campaigns
+  FOR EACH ROW
+  EXECUTE FUNCTION update_campaigns_updated_at();
+
+COMMENT ON TABLE campaigns IS 'Sponsored content campaigns with approval workflow';
