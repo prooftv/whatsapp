@@ -51,3 +51,44 @@ export const downloadMedia = async (mediaUrl) => {
     throw error;
   }
 };
+
+export const sendWhatsAppMessage = async (to, message, mediaUrls = []) => {
+  try {
+    // Send text message
+    const textResponse = await whatsappAPI.post('/messages', {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'text',
+      text: { body: message }
+    });
+    
+    // Send media if provided
+    for (const mediaUrl of mediaUrls) {
+      try {
+        const mediaType = getMediaType(mediaUrl);
+        await whatsappAPI.post('/messages', {
+          messaging_product: 'whatsapp',
+          to,
+          type: mediaType,
+          [mediaType]: { link: mediaUrl }
+        });
+      } catch (mediaError) {
+        console.error('Media send error:', mediaError.message);
+        // Continue with other media files
+      }
+    }
+    
+    return textResponse.data;
+  } catch (error) {
+    console.error('WhatsApp broadcast error:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+function getMediaType(url) {
+  const ext = url.split('.').pop().toLowerCase();
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'image';
+  if (['mp4', 'webm', '3gp'].includes(ext)) return 'video';
+  if (['mp3', 'wav', 'ogg', 'm4a', 'aac'].includes(ext)) return 'audio';
+  return 'document';
+}

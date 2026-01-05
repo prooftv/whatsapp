@@ -100,11 +100,15 @@ app.use(cookieParser());
 
 // serve admin.html with csrf cookie set when ADMIN_CSRF_TOKEN is configured
 app.get('/admin.html', csrfCookieSetter, (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/admin-dashboard.html'));
+  res.sendFile(path.join(__dirname, '../public/login.html'));
 });
 
 app.get('/admin-dashboard.html', csrfCookieSetter, (req, res) => {
   res.sendFile(path.join(__dirname, '../public/admin-dashboard.html'));
+});
+
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/login.html'));
 });
 
 // Mount admin routes with CSRF enforcement for state-changing requests
@@ -193,8 +197,13 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/landing.html'));
 });
 
+// Public PWA moments page
 app.get('/moments', (req, res) => {
-  res.redirect('https://moments-pwa.unamifoundation.org/moments');
+  res.sendFile(path.join(__dirname, '../public/moments/index.html'));
+});
+
+app.get('/moments/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/moments/index.html'));
 });
 
 // Error handling

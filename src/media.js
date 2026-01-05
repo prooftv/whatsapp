@@ -373,4 +373,6 @@ export const deleteMedia = async (mediaId) => {
   }
 };
 
-export { MEDIA_CONFIG };
+export const downloadAndStoreMedia = async (mediaId, messageId, mediaType) => {
+  return await processMedia(messageId, mediaId, mediaType);
+};

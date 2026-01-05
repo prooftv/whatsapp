@@ -453,9 +453,42 @@
     </div>
 
     <script>
-        // Supply Supabase details for the admin UI (override in production)
-        window.SUPABASE_URL = window.SUPABASE_URL || 'https://arqeiadudzbmzdhqkit.supabase.co';
-        window.SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'SUPABASE_ANON_KEY_PLACEHOLDER';
+        // Supply Supabase details for the admin UI
+        window.SUPABASE_URL = 'https://arqeiadudzwbmzdhqkit.pooler.supabase.com';
+        window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFycWVpYWR1ZHp3Ym16ZGhxa2l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyMTg1OTgsImV4cCI6MjA4MTc5NDU5OH0.ZuFeM6U3_-romnhLN2X3ozqWHovifqMQjxRAc3N8r2E';
+        
+        // Check authentication on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (window.supabase && window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
+                const supabaseClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                
+                if (!session) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+                
+                // Verify admin access
+                try {
+                    const response = await fetch('/admin/analytics', {
+                        headers: {
+                            'Authorization': `Bearer ${session.access_token}`
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        window.location.href = '/login.html';
+                        return;
+                    }
+                } catch (error) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+            } else {
+                window.location.href = '/login.html';
+                return;
+            }
+        });
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
     <script src="/js/admin.js"></script>

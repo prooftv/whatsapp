@@ -3,6 +3,39 @@ import { supabase } from '../config/supabase.js';
 
 const router = express.Router();
 
+// Get published moments for public PWA
+router.get('/moments', async (req, res) => {
+  try {
+    const { region, category } = req.query;
+    
+    let query = supabase
+      .from('moments')
+      .select(`
+        id,
+        title,
+        content,
+        region,
+        category,
+        is_sponsored,
+        broadcasted_at,
+        sponsors(display_name)
+      `)
+      .eq('status', 'broadcasted')
+      .order('broadcasted_at', { ascending: false })
+      .limit(50);
+
+    if (region) query = query.eq('region', region);
+    if (category) query = query.eq('category', category);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    res.json({ moments: data || [] });
+  } catch (error) {
+    res.status(500).json({ error: 'Unable to load moments' });
+  }
+});
+
 // Public stats endpoint (no auth required)
 router.get('/stats', async (req, res) => {
   try {

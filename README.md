@@ -221,9 +221,9 @@ npm run dev  # Start with file watching
 ### Adding New Features
 1. Update database schema if needed
 2. Add API endpoints in `src/admin.js`
-3. Update PWA frontend in `public/index.html`
+3. Update admin PWA in `public/admin-dashboard.html`
 4. Add tests in `tests/`
-5. Update documentation
+5. Update documentation in `/docs/`
 
 ### MCP Integration
 - Advisory endpoint: `/advisory`

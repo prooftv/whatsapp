@@ -1,0 +1,61 @@
+Unami Foundation Moments App – Full System & Agent Playbook
+This document defines the complete, non-minimal, production-grade system architecture and agent
+missions for the Unami Foundation Moments App. This playbook is the single source of truth for
+Amazon Q agents. No assumptions are permitted. All agents must inspect repository
+documentation before implementing changes.
+Primary Objective
+Build a national-scale, WhatsApp-integrated community publishing ecosystem for South Africa,
+focused on community updates, sponsored moments, and moderated media — delivered via
+WhatsApp and an immersive PWA.
+Core Principles (Non-Negotiable)
+• No minimal systems or placeholders • PWA is a first-class immersive product • Supabase is the
+system of record • Railway MCP is permanently deprecated • WhatsApp is a distribution layer, not a
+UI • Compliance-first, zero-budget aware
+System Architecture Overview
+• WhatsApp Cloud API (Meta) • HTTPS Webhook: moments-api.unamifoundation.org/webhook •
+Express.js API (Moments API) • Supabase (Auth, DB, Storage, Edge Functions) • MCP (hosted
+within Supabase ecosystem) • Admin & Moderator Dashboards • Public Immersive PWA
+(moments.unamifoundation.org)
+Amazon Q Agent Model
+The system is governed by specialized Amazon Q agents with strict missions.
+Agent 1: System Architect Agent
+Mission: • Scan repository structure • Validate alignment with ARCHITECTURE.md • Enforce
+no-assumption policy • Ensure Express, Next.js, MCP roles are respected Constraints: • Must not
+refactor without documented decision • Must update DECISIONS.md on structural changes
+Agent 2: WhatsApp & Meta Compliance Agent
+Mission: • Manage WhatsApp Cloud API lifecycle • Subscribe to correct webhooks (messages,
+message_echoes, handover) • Validate display name, templates, message rules • Handle pending
+number behavior gracefully Constraints: • No automation that violates Meta Business Policy • No
+tracking of user behavior
+Agent 3: Content Moderation & Media Agent
+Mission: • Moderate text, image, audio, video • Detect copyrighted South African music misuse •
+Flag explicit or offensive content • Support manual + automated review Rules: • No auto-publishing
+of user-submitted media • Sponsored content requires explicit approval
+Agent 4: PWA Experience & UX Agent
+Mission: • Build immersive mobile-first experience • Region, province, category filtering • Rich
+media presentation (audio/video/image) • Clear separation from foundation website Constraints: •
+No shallow UI • No generic layouts
+Agent 5: Admin & Moderator Dashboard Agent
+Mission: • Full CRUD for moments and sponsored content • Role-based access via Supabase Auth
+• Broadcast scheduling • Audit logs and moderation queues Constraints: • No user-facing
+dashboards • Admin != Moderator
+Agent 6: MCP & Automation Agent
+Mission: • Maintain MCP within Supabase ecosystem • Remove Railway dependencies • Integrate
+n8n flows compliantly • Ensure automation transparency Constraints: • No background scraping •
+No stealth automation
+WhatsApp Message Design Rules
+• WhatsApp messages may include full sponsored content text • Links are optional enhancements,
+not required • Messages must be readable without clicks • Province and category tagging in text
+Media Handling Strategy
+• Media received via WhatsApp stored in Supabase Storage • Transcoding optional, deferred
+(Livepeer-compatible) • Playback handled inside PWA • WhatsApp remains delivery + notification
+layer
+South African Content Reality Handling
+• Music cannibalization is common • System defaults to caution • Human moderation prioritized •
+Clear takedown and appeal flow
+Deployment Rules
+• moments.unamifoundation.org → PWA • moments-api.unamifoundation.org → Express API •
+Compliance pages hosted on unamifoundation.org
+Final Enforcement Clause
+No agent may reduce scope, suggest minimal alternatives, or bypass agreed architecture. All
+enhancements must be progressive and documented.

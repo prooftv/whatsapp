@@ -1,11 +1,12 @@
-# WhatsApp Community Gateway - Architecture
+# Unami Foundation Moments - Architecture
 
-## Core Principles
+## Core Principles (Playbook Aligned)
 
-1. **WhatsApp IS the interface** - No frontend applications
-2. **Moments over users** - System hosts community expressions
-3. **Context over keywords** - Intelligent content understanding
-4. **Log over block** - Preserve community expression
+1. **PWA is a first-class immersive product** - Public PWA for community engagement
+2. **Supabase is the system of record** - All data and MCP hosted in Supabase
+3. **Railway MCP is permanently deprecated** - MCP migrated to Supabase Edge Functions
+4. **WhatsApp is a distribution layer, not a UI** - Community receives content via WhatsApp
+5. **Compliance-first, zero-budget aware** - Meta policies and privacy protection
 
 ## Component Architecture
 
@@ -54,10 +55,18 @@ WhatsApp → Gateway → Supabase → n8n → MCP → Advisory Logs
 - **Gateway down**: WhatsApp queues messages, replay on restart
 - **Supabase down**: System stops (acceptable single point of failure)
 
-## No Dashboards Policy
+## Admin & Public Interfaces
 
-This system intentionally has NO admin interfaces, dashboards, or frontend applications. All monitoring happens through:
-- Supabase direct database access
-- n8n workflow execution logs  
-- Server console logs
-- WhatsApp message flow
+### Admin Dashboard PWA
+- Role-based content management at `/admin-dashboard.html`
+- Moments CRUD, sponsor management, broadcast analytics
+- Content moderation queue and system settings
+- Supabase Auth integration
+
+### Public PWA (Planned)
+- Immersive community moments experience
+- Province and category filtering
+- Rich media presentation
+- Mobile-first responsive design
+
+**Note**: See `/docs/ARCHITECTURE_UPDATED.md` for complete architectural details.

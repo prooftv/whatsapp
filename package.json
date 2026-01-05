@@ -27,5 +27,8 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.1.4"
   }
 }

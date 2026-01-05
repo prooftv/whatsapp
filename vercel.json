@@ -1,44 +1,44 @@
 {
-  "routes": [
+  "functions": {
+    "api/webhook.js": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
     {
-      "src": "/",
-      "dest": "/api/index.js"
+      "source": "/webhook",
+      "destination": "https://arqeiadudzwbmzdhqkit.supabase.co/functions/v1/webhook"
     },
     {
-      "src": "/index.html",
-      "dest": "/api/index.js"
+      "source": "/admin/(.*)",
+      "destination": "https://arqeiadudzwbmzdhqkit.supabase.co/functions/v1/admin-api/$1"
     },
     {
-      "src": "/admin-dashboard.html",
-      "status": 302,
-      "headers": {
-        "Location": "https://moments-api.unamifoundation.org/admin-dashboard.html"
-      }
+      "source": "/moments/(.*)",
+      "destination": "/public/moments/$1"
     },
     {
-      "src": "/admin/(.*)",
-      "status": 302,
-      "headers": {
-        "Location": "https://moments-api.unamifoundation.org/admin/$1"
-      }
-    },
+      "source": "/moments",
+      "destination": "/public/moments/index.html"
+    }
+  ],
+  "headers": [
     {
-      "src": "/webhook(.*)",
-      "status": 302,
-      "headers": {
-        "Location": "https://moments-api.unamifoundation.org/webhook$1"
-      }
-    },
-    {
-      "src": "/health",
-      "status": 302,
-      "headers": {
-        "Location": "https://moments-api.unamifoundation.org/health"
-      }
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/api/index.js"
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        }
+      ]
     }
   ]
 }

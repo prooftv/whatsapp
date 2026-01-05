@@ -1,25 +1,21 @@
-import axios from 'axios';
-import { supabase } from '../config/railway-db.js';
+import { supabase } from '../config/supabase.js';
 
 export const callMCPAdvisory = async (messageData) => {
-  // Use existing MCP Railway service
-  const mcpEndpoint = process.env.MCP_ENDPOINT || 'https://mcp-production.up.railway.app/advisory';
-  
   try {
-    const response = await axios.post(mcpEndpoint, {
-      message: messageData.content,
-      language: messageData.language_detected,
-      media_type: messageData.message_type,
+    // Use Supabase-native MCP function (replaces Railway)
+    const { data, error } = await supabase.rpc('mcp_advisory', {
+      message_content: messageData.content,
+      message_language: messageData.language_detected,
+      message_type: messageData.message_type,
       from_number: messageData.from_number,
-      timestamp: messageData.timestamp
-    }, {
-      timeout: 5000,
-      headers: { 'Content-Type': 'application/json' }
+      message_timestamp: messageData.timestamp
     });
     
-    const advisory = response.data;
+    if (error) throw error;
     
-    // Store advisory results if Supabase is available
+    const advisory = data;
+    
+    // Store advisory results in database
     try {
       await supabase.from('advisories').insert([
         {
@@ -49,13 +45,13 @@ export const callMCPAdvisory = async (messageData) => {
         }
       ]);
     } catch (dbError) {
-      console.log('Advisory storage skipped:', dbError.message);
+      console.log('Advisory storage handled by trigger:', dbError.message);
     }
     
     return advisory;
     
   } catch (error) {
-    console.error('MCP Advisory error:', error.message);
+    console.error('Supabase MCP Advisory error:', error.message);
     
     // Return safe default when MCP fails
     return {
@@ -64,7 +60,7 @@ export const callMCPAdvisory = async (messageData) => {
       harm_signals: { detected: false, confidence: 0, type: 'none', context: 'MCP unavailable' },
       spam_indicators: { detected: false, confidence: 0, patterns: [] },
       escalation_suggested: false,
-      notes: 'MCP service unavailable - using defaults'
+      notes: 'Supabase MCP service unavailable - using defaults'
     };
   }
 };
