@@ -55,7 +55,7 @@ export function requireRole(allowed = []) {
       const metadataRole = user.user_metadata?.role;
       const role = dbRole || metadataRole || 'viewer';
 
-      if (allowed.length === 0 || allowed.includes(role)) {
+      if (allowed.length === 0 || allowed.includes(role) || (role === 'super_admin' && allowed.includes('superadmin'))) {
         req.user_role = role;
         return next();
       }
