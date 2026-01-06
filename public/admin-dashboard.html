@@ -464,7 +464,7 @@
                 const { data: { session } } = await supabaseClient.auth.getSession();
                 
                 if (!session) {
-                    window.location.href = '/login-clean.html';
+                    window.location.href = '/login.html';
                     return;
                 }
                 
@@ -472,12 +472,12 @@
                 document.getElementById('user-email').textContent = session.user.email;
                 document.getElementById('sign-out').addEventListener('click', async () => {
                     await supabaseClient.auth.signOut();
-                    window.location.href = '/login-clean.html';
+                    window.location.href = '/login.html';
                 });
                 
             } catch (error) {
                 console.error('Auth error:', error);
-                window.location.href = '/login-clean.html';
+                window.location.href = '/login.html';
             }
         });
     </script>
