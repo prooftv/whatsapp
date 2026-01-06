@@ -26,9 +26,9 @@ app.get('/health', (req, res) => {
 app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', 
     "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+    "script-src 'self' 'unsafe-inline'; " +
     "style-src 'self' 'unsafe-inline'; " +
-    "connect-src 'self' https://arqeiadudzwbmzdhqkit.supabase.co wss://arqeiadudzwbmzdhqkit.supabase.co; " +
+    "connect-src 'self' https://arqeiadudzwbmzdhqkit.supabase.co; " +
     "img-src 'self' data: https:; " +
     "font-src 'self' data:;"
   );
