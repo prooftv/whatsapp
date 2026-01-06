@@ -74,7 +74,7 @@ serve(async (req) => {
       }
       
       // Create simple session token
-      const sessionToken = crypto.randomUUID()
+      const sessionToken = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
       
       console.log('Creating session...')
