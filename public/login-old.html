@@ -139,13 +139,51 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-        // Single Supabase client instance - no multiple initialization
-        const supabaseClient = window.supabase.createClient(
-            'https://arqeiadudzwbmzdhqkit.supabase.co',
-            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFycWVpYWR1ZHp3Ym16ZGhxa2l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyMTg1OTgsImV4cCI6MjA4MTc5NDU5OH0.ZuFeM6U3_-romnhLN2X3ozqWHovifqMQjxRAc3N8r2E'
-        );
+        // Single global Supabase client - prevent multiple instances
+        let supabaseClient = null;
+        
+        function getSupabaseClient() {
+            if (!supabaseClient) {
+                supabaseClient = window.supabase.createClient(
+                    'https://arqeiadudzwbmzdhqkit.supabase.co',
+                    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFycWVpYWR1ZHp3Ym16ZGhxa2l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyMTg1OTgsImV4cCI6MjA4MTc5NDU5OH0.ZuFeM6U3_-romnhLN2X3ozqWHovifqMQjxRAc3N8r2E'
+                );
+            }
+            return supabaseClient;
+        }
+        
+        // Fix multiple Supabase client instances
+        function initSupabase() {
+            initAttempts++;
+            console.log('Init attempt:', initAttempts);
+            
+            if (window.supabase && window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
+                try {
+                    // Only create one instance
+                    if (!supabaseClient) {
+                        supabaseClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+                        console.log('Supabase client created successfully');
+                    }
+                    return true;
+                } catch (error) {
+                    console.error('Supabase client creation failed:', error);
+                    return false;
+                }
+            } else {
+                console.error('Supabase not available:', {
+                    supabase: !!window.supabase,
+                    url: !!window.SUPABASE_URL,
+                    key: !!window.SUPABASE_ANON_KEY
+                });
+                
+                // Retry up to 3 times only
+                if (initAttempts < 3) {
+                    setTimeout(initSupabase, 1000);
+                }
+                return false;
+            }
+        }
         
         function sanitizeInput(input) {
             if (typeof input !== 'string') return '';
@@ -196,6 +234,9 @@
         }
         
         document.addEventListener('DOMContentLoaded', () => {
+            // Try to initialize immediately
+            initSupabase();
+            
             const form = document.getElementById('login-form');
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -206,19 +247,37 @@
                 const rawEmail = formData.get('email');
                 const rawPassword = formData.get('password');
                 
+                // Input validation and sanitization
+                const email = sanitizeInput(rawEmail);
+                const password = sanitizeInput(rawPassword);
+                
+                // Validate inputs
+                if (!validateEmail(email)) {
+                    throw new Error('Please enter a valid email address');
+                }
+                
+                if (!validatePassword(password)) {
+                    throw new Error('Password must be between 8-128 characters');
+                }
+                
+                // Rate limiting check (simple client-side)
+                const lastAttempt = localStorage.getItem('lastLoginAttempt');
+                const now = Date.now();
+                if (lastAttempt && (now - parseInt(lastAttempt)) < 3000) {
+                    throw new Error('Please wait before trying again');
+                }
+                localStorage.setItem('lastLoginAttempt', now.toString());
+                
                 try {
-                    // Input validation and sanitization
-                    const email = sanitizeInput(rawEmail);
-                    const password = sanitizeInput(rawPassword);
-                    
-                    // Validate inputs
-                    if (!validateEmail(email)) {
-                        throw new Error('Please enter a valid email address');
+                    // Try to initialize if not already done
+                    if (!supabaseClient) {
+                        const initialized = initSupabase();
+                        if (!initialized) {
+                            throw new Error('Authentication service unavailable - please refresh and try again');
+                        }
                     }
                     
-                    if (!validatePassword(password)) {
-                        throw new Error('Password must be between 8-128 characters');
-                    }
+                    console.log('Attempting login for:', email.replace(/(.{2}).*(@.*)/, '$1***$2'));
                     
                     // Sign in with Supabase
                     const { data, error } = await supabaseClient.auth.signInWithPassword({
@@ -227,16 +286,23 @@
                     });
                     
                     if (error) {
+                        console.error('Supabase auth error:', error);
                         throw new Error(error.message);
                     }
                     
+                    console.log('Login successful, session:', !!data.session);
+                    
                     if (data.session) {
+                        // Skip admin verification for now, just redirect
+                        console.log('Redirecting to admin dashboard');
                         window.location.href = '/admin-dashboard.html';
                     } else {
                         throw new Error('Login failed - no session created');
                     }
                     
                 } catch (error) {
+                    console.error('Login error type:', error.constructor.name);
+                    
                     // Generic error message to prevent information disclosure
                     let userMessage = 'Login failed. Please check your credentials.';
                     
@@ -247,7 +313,7 @@
                         userMessage = 'Please check your email and confirm your account';
                     } else if (error.message.includes('Too many requests')) {
                         userMessage = 'Too many login attempts. Please try again later';
-                    } else if (error.message.includes('valid email') || error.message.includes('Password must be')) {
+                    } else if (error.message.includes('service unavailable') || error.message.includes('wait before trying')) {
                         userMessage = error.message;
                     }
                     
@@ -257,5 +323,6 @@
             });
         });
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onload="initSupabase()" onerror="showError('Failed to load authentication service')"></script>
 </body>
 </html>
