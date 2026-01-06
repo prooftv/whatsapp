@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Access</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 400px; margin: 100px auto; padding: 20px; }
+        .btn { background: #2563eb; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; }
+        .info { background: #f0f9ff; padding: 15px; border-radius: 6px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>🌍 Admin Access</h1>
+    <div class="info">
+        <strong>Temporary Access Solution</strong><br>
+        While the login system is being finalized, use this direct access.
+    </div>
+    
+    <button class="btn" onclick="grantAccess()">Access Admin Dashboard</button>
+    
+    <script>
+        function grantAccess() {
+            // Set temporary admin session
+            localStorage.setItem('admin.auth.token', 'temp-admin-session-' + Date.now());
+            localStorage.setItem('admin.user.info', JSON.stringify({
+                id: 'temp-admin',
+                email: 'info@unamifoundation.org',
+                name: 'Main Admin'
+            }));
+            
+            // Redirect to dashboard
+            window.location.href = '/admin-dashboard.html';
+        }
+    </script>
+</body>
+</html>
