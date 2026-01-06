@@ -6,6 +6,10 @@
       "destination": "https://arqeiadudzwbmzdhqkit.supabase.co/functions/v1/webhook"
     },
     {
+      "source": "/api/admin/login",
+      "destination": "https://arqeiadudzwbmzdhqkit.supabase.co/functions/v1/admin-api"
+    },
+    {
       "source": "/admin/(.*)",
       "destination": "https://arqeiadudzwbmzdhqkit.supabase.co/functions/v1/admin-api/$1"
     },
