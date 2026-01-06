@@ -128,8 +128,12 @@ function handleAction(action, element) {
         case 'delete-sponsor':
             deleteSponsor(id);
             break;
-        case 'edit-setting':
-            editSetting(key, value, type);
+        case 'create-campaign':
+            openCampaignModal();
+            break;
+        case 'close-campaign-modal':
+        case 'cancel-campaign':
+            closeCampaignModal();
             break;
     }
 }
@@ -287,7 +291,7 @@ function deleteMoment(id) {
     const moment = allMoments.find(m => m.id === id);
     showConfirm(`Delete "${moment.title}"?`, async () => {
         try {
-                const response = await apiFetch(`/admin/moments/${id}`, {
+                const response = await apiFetch(`/moments/${id}`, {
                 method: 'DELETE'
             });
             
@@ -308,7 +312,7 @@ function deleteMoment(id) {
 async function broadcastMoment(momentId) {
     showConfirm('Broadcast this moment now?', async () => {
         try {
-                const response = await apiFetch(`/admin/moments/${momentId}/broadcast`, {
+                const response = await apiFetch(`/moments/${momentId}/broadcast`, {
                 method: 'POST'
             });
             
@@ -598,7 +602,7 @@ function editSetting(key, currentValue, type) {
 // Update setting
 async function updateSetting(key, value) {
     try {
-        const response = await apiFetch(`/admin/settings/${key}`, {
+        const response = await apiFetch(`/settings/${key}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ value })
@@ -767,7 +771,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             try {
-                const url = isEdit ? `/admin/moments/${data.id}` : '/admin/moments';
+                const url = isEdit ? `/moments/${data.id}` : '/moments';
                 const method = isEdit ? 'PUT' : 'POST';
 
                 const response = await apiFetch(url, {
@@ -801,7 +805,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const isEdit = !!data.id;
             
             try {
-                const url = isEdit ? `${API_BASE}/admin/sponsors/${data.id}` : `${API_BASE}/admin/sponsors`;
+                const url = isEdit ? `/sponsors/${data.id}` : '/sponsors';
                 const method = isEdit ? 'PUT' : 'POST';
                 
                 const response = await apiFetch(url, {
@@ -962,3 +966,53 @@ async function loadCampaigns() {
         document.getElementById('campaigns-list').innerHTML = '<div class="error">Failed to load campaigns</div>';
     }
 }
+
+// Campaign modal functions
+function openCampaignModal() {
+    document.getElementById('campaign-modal').classList.add('active');
+    document.getElementById('campaign-form').reset();
+}
+
+function closeCampaignModal() {
+    document.getElementById('campaign-modal').classList.remove('active');
+    document.getElementById('campaign-form').reset();
+}
+
+// Add campaign form handler
+document.addEventListener('DOMContentLoaded', () => {
+    const campaignForm = document.getElementById('campaign-form');
+    if (campaignForm) {
+        campaignForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            // Handle checkboxes for regions and categories
+            const regions = Array.from(document.querySelectorAll('input[name="target_regions"]:checked')).map(cb => cb.value);
+            const categories = Array.from(document.querySelectorAll('input[name="target_categories"]:checked')).map(cb => cb.value);
+            
+            data.target_regions = regions;
+            data.target_categories = categories;
+            
+            try {
+                const response = await apiFetch('/campaigns', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    showSuccess('Campaign created successfully!');
+                    closeCampaignModal();
+                    loadCampaigns();
+                } else {
+                    const error = await response.json();
+                    showError(error.error || 'Failed to create campaign');
+                }
+            } catch (error) {
+                showError('Failed to create campaign');
+            }
+        });
+    }
+});
