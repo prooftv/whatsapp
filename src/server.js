@@ -99,8 +99,8 @@ app.use(express.static(path.join(__dirname, '../public'), {
 app.use(cookieParser());
 
 // serve admin.html with csrf cookie set when ADMIN_CSRF_TOKEN is configured
-app.get('/admin.html', csrfCookieSetter, (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/login.html'));
+app.get('/admin', csrfCookieSetter, (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/admin-dashboard.html'));
 });
 
 app.get('/admin-dashboard.html', csrfCookieSetter, (req, res) => {

@@ -520,7 +520,22 @@
                 const token = localStorage.getItem('admin.auth.token');
                 const userInfo = localStorage.getItem('admin.user.info');
                 
+                console.log('Auth check:', { hasToken: !!token, hasUserInfo: !!userInfo });
+                
                 if (!token || !userInfo) {
+                    console.log('No auth found, redirecting to login');
+                    window.location.href = '/login.html';
+                    return;
+                }
+                
+                // Validate token format
+                try {
+                    const user = JSON.parse(userInfo);
+                    console.log('User info parsed successfully:', user.email || user.name);
+                } catch (parseError) {
+                    console.error('Invalid user info format, clearing auth');
+                    localStorage.removeItem('admin.auth.token');
+                    localStorage.removeItem('admin.user.info');
                     window.location.href = '/login.html';
                     return;
                 }
@@ -540,6 +555,8 @@
                     });
                 }
                 
+                console.log('Auth successful, initializing admin interface');
+                
                 // Initialize the admin interface
                 loadAnalytics();
                 loadRecentActivity();
@@ -548,6 +565,8 @@
                 
             } catch (error) {
                 console.error('Auth error:', error);
+                localStorage.removeItem('admin.auth.token');
+                localStorage.removeItem('admin.user.info');
                 window.location.href = '/login.html';
             }
         });
