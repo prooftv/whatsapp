@@ -367,7 +367,8 @@ serve(async (req) => {
       return new Response(JSON.stringify({ categories: categories || [] }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
-    }
+    // Create campaign
+    if (path.includes('/campaigns') && method === 'POST' && body) {
       const { data, error } = await supabase
         .from('campaigns')
         .insert({
@@ -438,6 +439,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
+    // Get campaigns
     if (path.includes('/campaigns') && method === 'GET') {
       const { data: campaigns } = await supabase
         .from('campaigns')
