@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS moments (
   language TEXT DEFAULT 'eng',
   sponsor_id UUID REFERENCES sponsors(id),
   is_sponsored BOOLEAN DEFAULT FALSE,
+  content_source TEXT DEFAULT 'community', -- community, admin, campaign
   pwa_link TEXT,
   media_urls TEXT[], -- Array of media URLs
   scheduled_at TIMESTAMPTZ,
