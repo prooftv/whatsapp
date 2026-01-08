@@ -199,6 +199,7 @@
 
             container.innerHTML = moments.map(moment => `
                 <div class="moment-card">
+                    ${renderSponsorBranding(moment.sponsors, moment.is_sponsored)}
                     <h3 class="moment-title">${escapeHtml(moment.title)}</h3>
                     <p class="moment-content">${escapeHtml(moment.content)}</p>
                     
@@ -209,14 +210,34 @@
                         <span class="badge category-badge">${escapeHtml(moment.category)}</span>
                         ${moment.is_sponsored ? '<span class="badge sponsored-badge">Sponsored</span>' : ''}
                         ${moment.content_source === 'community' ? '<span class="badge" style="background: #e0f2fe; color: #0277bd;">Community</span>' : ''}
+                        ${moment.content_source === 'campaign' ? '<span class="badge" style="background: #fff3e0; color: #f57c00;">Campaign</span>' : ''}
                     </div>
                     
                     <div class="moment-footer">
                         <span>${formatDate(moment.broadcasted_at)}</span>
-                        ${moment.sponsors?.display_name ? `<span>by ${escapeHtml(moment.sponsors.display_name)}</span>` : ''}
+                        ${renderSponsorAttribution(moment.sponsors, moment.is_sponsored)}
                     </div>
                 </div>
             `).join('');
+        }
+        
+        function renderSponsorBranding(sponsor, isSponsored) {
+            if (!isSponsored || !sponsor) return '';
+            
+            const logoHtml = sponsor.logo_url ? 
+                `<img src="${escapeHtml(sponsor.logo_url)}" alt="${escapeHtml(sponsor.display_name)} logo" style="height: 24px; width: auto; margin-right: 8px;">` : '';
+            
+            return `
+                <div class="sponsor-branding" style="display: flex; align-items: center; margin-bottom: 12px; padding: 8px; background: #f8fafc; border-radius: 6px; border-left: 3px solid #fbbf24;">
+                    ${logoHtml}
+                    <span style="font-size: 0.75rem; color: #6b7280; font-weight: 500;">Sponsored by ${escapeHtml(sponsor.display_name)}</span>
+                </div>
+            `;
+        }
+        
+        function renderSponsorAttribution(sponsor, isSponsored) {
+            if (!isSponsored || !sponsor) return '';
+            return `<span style="font-size: 0.75rem; color: #6b7280;">by ${escapeHtml(sponsor.display_name)}</span>`;
         }
         
         function renderMedia(mediaUrls) {
