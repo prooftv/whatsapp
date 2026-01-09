@@ -19,7 +19,8 @@ router.get('/moments', async (req, res) => {
         is_sponsored,
         broadcasted_at,
         content_source,
-        sponsors(display_name)
+        media_urls,
+        sponsors(display_name, logo_url)
       `)
       .eq('status', 'broadcasted')
       .order('broadcasted_at', { ascending: false })
@@ -29,10 +30,28 @@ router.get('/moments', async (req, res) => {
     if (category) query = query.eq('category', category);
     if (source) query = query.eq('content_source', source);
 
-    const { data, error } = await query;
+    const { data: moments, error } = await query;
     if (error) throw error;
 
-    res.json({ moments: data || [] });
+    // Get comments for each moment
+    const momentsWithComments = await Promise.all(
+      (moments || []).map(async (moment) => {
+        const { data: comments } = await supabase
+          .from('moment_comments')
+          .select('*')
+          .eq('moment_id', moment.id)
+          .eq('approved', true)
+          .order('created_at', { ascending: false })
+          .limit(10);
+        
+        return {
+          ...moment,
+          comments: comments || []
+        };
+      })
+    );
+
+    res.json({ moments: momentsWithComments });
   } catch (error) {
     res.status(500).json({ error: 'Unable to load moments' });
   }
@@ -65,6 +84,26 @@ router.get('/stats', async (req, res) => {
       totalBroadcasts: 0,
       lastUpdated: new Date().toISOString()
     });
+  }
+});
+
+// Get comments for a specific moment
+router.get('/comments/:momentId', async (req, res) => {
+  try {
+    const { momentId } = req.params;
+    
+    const { data: comments, error } = await supabase
+      .from('moment_comments')
+      .select('*')
+      .eq('moment_id', momentId)
+      .eq('approved', true)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    res.json({ comments: comments || [] });
+  } catch (error) {
+    res.status(500).json({ error: 'Unable to load comments' });
   }
 });
 

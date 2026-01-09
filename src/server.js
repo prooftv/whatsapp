@@ -120,6 +120,9 @@ app.use('/admin', csrfMiddleware, adminRoutes);
 // Mount public routes (no auth required)
 app.use('/public', publicRoutes);
 
+// API aliases for frontend compatibility
+app.use('/api', publicRoutes);
+
 // Health check
 app.get('/health', async (req, res) => {
   const health = await healthCheck();
