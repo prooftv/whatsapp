@@ -16,6 +16,6 @@ const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey, {
   auth: { persistSession: false }
 });
 
-console.log('Supabase initialized with session pooler for Railway IPv4');
+console.log('Supabase initialized successfully');
 
 export { supabase, supabaseAnon };
