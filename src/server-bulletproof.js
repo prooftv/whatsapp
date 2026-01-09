@@ -99,154 +99,342 @@ app.get('/webhook', (req, res) => {
   }
 });
 
-// Webhook handler - FIXED to process messages and trigger MCP
+// Webhook handler - COMPLETE implementation with all commands
 app.post('/webhook', async (req, res) => {
   try {
     console.log('Webhook received:', JSON.stringify(req.body, null, 2));
     
-    // Process WhatsApp webhook
-    if (req.body.entry?.[0]?.changes?.[0]?.value?.messages) {
-      const messages = req.body.entry[0].changes[0].value.messages;
-      
-      for (const message of messages) {
-        try {
-          // Store message in database with MCP processing
-          const { data: insertedMessage, error: insertError } = await supabase
-            .from('messages')
-            .insert({
-              whatsapp_id: message.id,
-              from_number: message.from,
-              message_type: message.type,
-              content: message.text?.body || message.caption || '',
-              timestamp: new Date(parseInt(message.timestamp) * 1000).toISOString(),
-              processed: false
-            })
-            .select()
-            .single();
-
-          if (insertError) {
-            console.error('Failed to insert message:', insertError);
-            continue;
-          }
-
-          console.log('Message stored, ID:', insertedMessage.id);
-
-          // Handle subscription commands
-          const text = (message.text?.body || '').toLowerCase().trim();
-          if (['start', 'join', 'subscribe'].includes(text)) {
-            await supabase.from('subscriptions').upsert({
-              phone_number: message.from,
-              opted_in: true,
-              opted_in_at: new Date().toISOString(),
-              last_activity: new Date().toISOString()
-            }, { onConflict: 'phone_number' });
-            
-            console.log('User subscribed:', message.from);
-          } else if (['stop', 'unsubscribe', 'quit', 'cancel'].includes(text)) {
-            await supabase.from('subscriptions').upsert({
-              phone_number: message.from,
-              opted_in: false,
-              opted_out_at: new Date().toISOString(),
-              last_activity: new Date().toISOString()
-            }, { onConflict: 'phone_number' });
-            
-            console.log('User unsubscribed:', message.from);
-          } else {
-            // Process as community content with MCP analysis
-            try {
-              const { data: advisory, error: mcpError } = await supabase.rpc('mcp_advisory', {
-                message_content: message.text?.body || '',
-                message_language: 'eng',
-                message_type: 'text',
-                from_number: message.from,
-                message_timestamp: new Date().toISOString()
-              });
-              
-              if (mcpError) {
-                console.error('MCP analysis failed:', mcpError);
-              }
-              
-              console.log('MCP analysis result:', advisory);
-              
-              // Auto-publish if safe (more lenient threshold)
-              const harmConfidence = advisory?.harm_signals?.confidence || 0;
-              const shouldPublish = harmConfidence < 0.8; // Increased threshold
-              
-              console.log('Publishing decision:', { harmConfidence, shouldPublish });
-              
-              if (shouldPublish) {
-                const content = message.text?.body || '';
-                const title = content.length <= 50 ? content : content.substring(0, 47) + '...';
-                
-                const { data: moment, error: momentError } = await supabase
-                  .from('moments')
-                  .insert({
-                    title,
-                    content,
-                    region: 'GP',
-                    category: 'Safety',
-                    status: 'broadcasted',
-                    broadcasted_at: new Date().toISOString(),
-                    created_by: 'community',
-                    content_source: 'community',
-                    is_sponsored: false
-                  })
-                  .select()
-                  .single();
-                
-                if (momentError) {
-                  console.error('Failed to create community moment:', momentError);
-                } else {
-                  console.log('Community moment auto-published:', moment.id);
-                }
-              } else {
-                console.log('Message flagged by MCP, not published. Harm confidence:', harmConfidence);
-              }
-            } catch (mcpError) {
-              console.error('MCP processing failed:', mcpError);
-              // Fallback: publish anyway with low risk assumption
-              const content = message.text?.body || '';
-              const title = content.length <= 50 ? content : content.substring(0, 47) + '...';
-              
-              const { data: moment } = await supabase
-                .from('moments')
-                .insert({
-                  title,
-                  content,
-                  region: 'GP',
-                  category: 'Safety',
-                  status: 'broadcasted',
-                  broadcasted_at: new Date().toISOString(),
-                  created_by: 'community',
-                  content_source: 'community',
-                  is_sponsored: false
-                })
-                .select()
-                .single();
-              
-              if (moment) {
-                console.log('Community moment published (MCP fallback):', moment.id);
-              }
-            }
-          }
-
-          // Mark message as processed
-          await supabase.from('messages')
-            .update({ processed: true })
-            .eq('id', insertedMessage.id);
-
-        } catch (msgError) {
-          console.error('Error processing message:', msgError);
-        }
-      }
+    const { entry } = req.body;
+    if (!entry || !entry[0]) {
+      return res.status(200).json({ status: 'no_entry' });
     }
-    
+
+    const changes = entry[0].changes;
+    if (!changes || !changes[0]) {
+      return res.status(200).json({ status: 'no_changes' });
+    }
+
+    const { value } = changes[0];
+    if (!value.messages || value.messages.length === 0) {
+      return res.status(200).json({ status: 'no_messages' });
+    }
+
+    // Process each message
+    for (const message of value.messages) {
+      await processMessage(message, value);
+    }
+
     res.status(200).json({ status: 'processed' });
   } catch (error) {
-    console.error('Webhook error:', error);
-    res.status(200).json({ status: 'received' });
+    console.error('Webhook processing error:', error);
+    res.status(500).json({ error: 'Processing failed' });
   }
 });
+
+async function processMessage(message, value) {
+  try {
+    const fromNumber = message.from;
+    const messageType = message.type;
+    let content = '';
+    let mediaId = null;
+
+    // Extract content based on message type
+    switch (messageType) {
+      case 'text':
+        content = message.text.body;
+        break;
+      case 'image':
+        content = message.image.caption || '[Image]';
+        mediaId = message.image.id;
+        break;
+      case 'audio':
+        content = '[Audio message]';
+        mediaId = message.audio.id;
+        break;
+      case 'video':
+        content = message.video.caption || '[Video]';
+        mediaId = message.video.id;
+        break;
+      case 'document':
+        content = message.document.filename || '[Document]';
+        mediaId = message.document.id;
+        break;
+      default:
+        content = `[${messageType} message]`;
+    }
+
+    // Handle commands
+    const command = content.toLowerCase().trim();
+    
+    if (command === 'stop' || command === 'unsubscribe') {
+      await handleOptOut(fromNumber);
+      return;
+    }
+    
+    if (command === 'start' || command === 'join') {
+      await handleOptIn(fromNumber);
+      return;
+    }
+    
+    if (command === 'help') {
+      await handleHelp(fromNumber);
+      return;
+    }
+    
+    if (command === 'regions') {
+      await handleRegions(fromNumber);
+      return;
+    }
+    
+    // Handle region selection (e.g., "KZN WC GP")
+    if (isRegionSelection(command)) {
+      await handleRegionSelection(fromNumber, command);
+      return;
+    }
+    
+    // Handle casual chat attempts
+    if (isCasualMessage(command)) {
+      await handleCasualChat(fromNumber);
+      return;
+    }
+
+    // Store message in database and update 24-hour messaging window
+    const { data: messageRecord, error: insertError } = await supabase
+      .from('messages')
+      .insert({
+        whatsapp_id: message.id,
+        from_number: fromNumber,
+        message_type: messageType,
+        content,
+        processed: false
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('Message insert error:', insertError);
+      return;
+    }
+
+    // Call Supabase MCP function for message analysis
+    try {
+      await supabase.rpc('mcp_advisory', {
+        message_content: content,
+        message_language: 'eng',
+        message_type: messageType,
+        from_number: fromNumber,
+        message_timestamp: new Date().toISOString()
+      });
+    } catch (mcpError) {
+      console.error('MCP analysis error:', mcpError);
+    }
+
+    // Mark as processed
+    await supabase
+      .from('messages')
+      .update({ processed: true })
+      .eq('id', messageRecord.id);
+
+  } catch (error) {
+    console.error('Message processing error:', error);
+  }
+}
+
+async function handleOptOut(phoneNumber) {
+  try {
+    await supabase
+      .from('subscriptions')
+      .upsert({
+        phone_number: phoneNumber,
+        opted_in: false,
+        opted_out_at: new Date().toISOString(),
+        last_activity: new Date().toISOString()
+      });
+    
+    console.log(`User ${phoneNumber} opted out`);
+  } catch (error) {
+    console.error('Opt-out error:', error);
+  }
+}
+
+async function handleOptIn(phoneNumber) {
+  try {
+    const defaultRegion = 'National';
+    const defaultCategories = ['Education', 'Safety', 'Culture', 'Opportunity', 'Events', 'Health', 'Technology'];
+    
+    await supabase
+      .from('subscriptions')
+      .upsert({
+        phone_number: phoneNumber,
+        opted_in: true,
+        opted_in_at: new Date().toISOString(),
+        last_activity: new Date().toISOString(),
+        regions: [defaultRegion],
+        categories: defaultCategories,
+        consent_timestamp: new Date().toISOString(),
+        consent_method: 'whatsapp_optin',
+        double_opt_in_confirmed: true
+      });
+    
+    const welcomeMessage = `🌍 Welcome to YOUR community signal service!
+
+This is where South Africans share local opportunities, events, and news from your region.
+
+📱 Submit your moments by messaging here
+🌐 See all community posts: moments.unamifoundation.org/moments
+📍 Choose regions: REGIONS
+❓ Commands: HELP`;
+    
+    await sendMessage(phoneNumber, welcomeMessage);
+    
+    console.log(`User ${phoneNumber} opted in`);
+  } catch (error) {
+    console.error('Opt-in error:', error);
+  }
+}
+
+function isCasualMessage(message) {
+  const casualPatterns = [
+    'hi', 'hey', 'hello', 'hola', 'howzit', 'sawubona',
+    'whatsapp', 'anyone', 'anybody', 'is anyone there',
+    'is anybody around', 'chat', 'talk', 'speak'
+  ];
+  return casualPatterns.some(pattern => message.includes(pattern));
+}
+
+async function handleHelp(phoneNumber) {
+  const helpMessage = `📡 Community Signal Service Commands:
+
+🔄 START - Subscribe to community signals
+🛑 STOP - Unsubscribe from signals
+❓ HELP - Show this help menu
+📍 REGIONS - Choose your areas
+
+🌍 Available Regions:
+KZN, WC, GP, EC, FS, LP, MP, NC, NW
+
+💬 Submit moments by messaging here
+🌐 Full community feed: moments.unamifoundation.org/moments
+
+This is YOUR community sharing platform.`;
+  
+  await sendMessage(phoneNumber, helpMessage);
+}
+
+async function handleRegions(phoneNumber) {
+  const regionsMessage = `📍 Choose your regions (reply with region codes):
+
+🏖️ KZN - KwaZulu-Natal
+🍷 WC - Western Cape
+🏙️ GP - Gauteng
+🌊 EC - Eastern Cape
+🌾 FS - Free State
+🌳 LP - Limpopo
+⛰️ MP - Mpumalanga
+🏜️ NC - Northern Cape
+💎 NW - North West
+
+Reply with codes like: KZN WC GP`;
+  
+  await sendMessage(phoneNumber, regionsMessage);
+}
+
+function isRegionSelection(message) {
+  const validRegions = ['kzn', 'wc', 'gp', 'ec', 'fs', 'lp', 'mp', 'nc', 'nw'];
+  const words = message.split(/\s+/);
+  
+  return words.length > 0 && words.every(word => validRegions.includes(word.toLowerCase()));
+}
+
+async function handleRegionSelection(phoneNumber, regionString) {
+  try {
+    const regionCodes = regionString.toUpperCase().split(/\s+/);
+    const regionMap = {
+      'KZN': 'KwaZulu-Natal',
+      'WC': 'Western Cape', 
+      'GP': 'Gauteng',
+      'EC': 'Eastern Cape',
+      'FS': 'Free State',
+      'LP': 'Limpopo',
+      'MP': 'Mpumalanga',
+      'NC': 'Northern Cape',
+      'NW': 'North West'
+    };
+    
+    const selectedRegions = regionCodes.map(code => regionMap[code]).filter(Boolean);
+    
+    if (selectedRegions.length === 0) {
+      await sendMessage(phoneNumber, '❌ Invalid region codes. Reply REGIONS to see valid options.');
+      return;
+    }
+    
+    await supabase
+      .from('subscriptions')
+      .upsert({
+        phone_number: phoneNumber,
+        regions: selectedRegions,
+        last_activity: new Date().toISOString(),
+        opted_in: true
+      });
+    
+    const confirmMessage = `✅ Regions updated!
+
+You'll now receive community signals from:
+${selectedRegions.map(region => `📍 ${region}`).join('\n')}
+
+💬 Submit moments by messaging here
+🌐 Browse all: moments.unamifoundation.org/moments`;
+    
+    await sendMessage(phoneNumber, confirmMessage);
+    
+    console.log(`User ${phoneNumber} updated regions to: ${selectedRegions.join(', ')}`);
+  } catch (error) {
+    console.error('Region selection error:', error);
+    await sendMessage(phoneNumber, '❌ Error updating regions. Please try again or contact support.');
+  }
+}
+
+async function handleCasualChat(phoneNumber) {
+  const chatMessage = `👋 Hi! This is your community signal service.
+
+South Africans share local opportunities and events here.
+
+📱 Submit moments by messaging
+🌐 Browse all: moments.unamifoundation.org/moments
+📍 Commands: HELP, REGIONS, STOP`;
+  
+  await sendMessage(phoneNumber, chatMessage);
+}
+
+async function sendMessage(phoneNumber, message) {
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v18.0/${process.env.WHATSAPP_PHONE_ID}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: phoneNumber,
+          type: 'text',
+          text: { body: message }
+        })
+      }
+    );
+    
+    if (response.ok) {
+      console.log(`Message sent to ${phoneNumber}`);
+    } else {
+      const error = await response.text();
+      console.error('Send message error:', error);
+    }
+  } catch (error) {
+    console.error('Send message error:', error.message);
+  }
+}
 
 // Admin login endpoint - secure Supabase function only
 app.post('/api/admin/login', async (req, res) => {
