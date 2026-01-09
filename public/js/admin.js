@@ -1,5 +1,5 @@
 // Direct API calls without Supabase library
-const API_BASE = window.location.origin + '/admin';
+const API_BASE = '/functions/v1/admin-api';
 
 // Get auth token from localStorage
 function getAuthToken() {

@@ -176,7 +176,7 @@
     <script>
         // Admin authentication using server-side proxy
         async function authenticateAdmin(email, password) {
-            const response = await fetch('/api/admin/login', {
+            const response = await fetch('/functions/v1/admin-api', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

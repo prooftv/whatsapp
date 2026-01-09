@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 4px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .loading { background: #d1ecf1; color: #0c5460; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Admin API Endpoint Tests</h1>
+    
+    <button onclick="testLogin()">Test Login</button>
+    <button onclick="testPublicStats()">Test Public Stats</button>
+    <button onclick="testPublicMoments()">Test Public Moments</button>
+    
+    <div id="results"></div>
+
+    <script>
+        function addResult(message, type = 'loading') {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.textContent = message;
+            document.getElementById('results').appendChild(div);
+            return div;
+        }
+
+        async function testLogin() {
+            const result = addResult('Testing login endpoint...');
+            try {
+                const response = await fetch('/functions/v1/admin-api', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'info@unamifoundation.org',
+                        password: 'Proof321#'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success && data.token) {
+                    result.className = 'test-result success';
+                    result.textContent = `✅ Login successful! Token: ${data.token.substring(0, 20)}...`;
+                    localStorage.setItem('test-token', data.token);
+                } else {
+                    result.className = 'test-result error';
+                    result.textContent = `❌ Login failed: ${data.error || 'Unknown error'}`;
+                }
+            } catch (error) {
+                result.className = 'test-result error';
+                result.textContent = `❌ Login error: ${error.message}`;
+            }
+        }
+
+        async function testPublicStats() {
+            const result = addResult('Testing public stats endpoint...');
+            try {
+                const response = await fetch('/functions/v1/admin-api/api/stats');
+                const data = await response.json();
+                
+                result.className = 'test-result success';
+                result.textContent = `✅ Stats loaded: ${data.totalMoments} moments, ${data.activeSubscribers} subscribers`;
+            } catch (error) {
+                result.className = 'test-result error';
+                result.textContent = `❌ Stats error: ${error.message}`;
+            }
+        }
+
+        async function testPublicMoments() {
+            const result = addResult('Testing public moments endpoint...');
+            try {
+                const response = await fetch('/functions/v1/admin-api/api/moments');
+                const data = await response.json();
+                
+                result.className = 'test-result success';
+                result.textContent = `✅ Moments loaded: ${data.moments?.length || 0} moments found`;
+            } catch (error) {
+                result.className = 'test-result error';
+                result.textContent = `❌ Moments error: ${error.message}`;
+            }
+        }
+
+        async function testAuthenticatedEndpoint() {
+            const token = localStorage.getItem('test-token');
+            if (!token) {
+                addResult('❌ No token found. Please login first.', 'error');
+                return;
+            }
+
+            const result = addResult('Testing authenticated analytics endpoint...');
+            try {
+                const response = await fetch('/functions/v1/admin-api/analytics', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                result.className = 'test-result success';
+                result.textContent = `✅ Analytics loaded: ${data.totalMoments} moments, ${data.activeSubscribers} subscribers`;
+            } catch (error) {
+                result.className = 'test-result error';
+                result.textContent = `❌ Analytics error: ${error.message}`;
+            }
+        }
+
+        // Add authenticated test button if token exists
+        if (localStorage.getItem('test-token')) {
+            const btn = document.createElement('button');
+            btn.textContent = 'Test Analytics (Auth)';
+            btn.onclick = testAuthenticatedEndpoint;
+            document.querySelector('button').parentNode.insertBefore(btn, document.getElementById('results'));
+        }
+    </script>
+</body>
+</html>
