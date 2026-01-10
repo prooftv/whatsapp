@@ -209,7 +209,44 @@ async function processMessage(message, value) {
       return;
     }
 
-    console.log('Storing message in database');
+    // Auto-create moment from meaningful messages
+    if (content && content.length > 20 && !isCommand(content) && !isCasualMessage(command)) {
+      console.log('Creating moment from message');
+      try {
+        const { data: moment, error: momentError } = await supabase
+          .from('moments')
+          .insert({
+            title: generateTitle(content),
+            content: content,
+            region: 'National',
+            category: 'Events',
+            content_source: 'community',
+            status: 'draft',
+            created_by: fromNumber,
+            media_urls: mediaId ? [`whatsapp_media_${mediaId}`] : []
+          })
+          .select()
+          .single();
+        
+        if (!momentError) {
+          console.log(`✅ Created moment: ${moment.title}`);
+        } else {
+          console.error('Moment creation error:', momentError);
+        }
+      } catch (momentCreationError) {
+        console.error('Moment creation failed:', momentCreationError);
+      }
+    }
+
+    function isCommand(text) {
+      const commands = ['start', 'stop', 'help', 'regions', 'join', 'unsubscribe'];
+      return commands.includes(text.toLowerCase().trim());
+    }
+    
+    function generateTitle(text) {
+      const words = text.split(' ').slice(0, 8);
+      return words.join(' ') + (text.split(' ').length > 8 ? '...' : '');
+    }
     // Store message in database and update 24-hour messaging window
     const { data: messageRecord, error: insertError } = await supabase
       .from('messages')
