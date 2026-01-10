@@ -167,6 +167,24 @@ async function processMessage(message, value) {
 
     console.log(`Message content: "${content}"`);
 
+    // Store message in database FIRST
+    const { data: messageRecord, error: insertError } = await supabase
+      .from('messages')
+      .insert({
+        whatsapp_id: message.id,
+        from_number: fromNumber,
+        message_type: messageType,
+        content,
+        processed: false
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('Message insert error:', insertError);
+      return;
+    }
+
     // Handle commands
     const command = content.toLowerCase().trim();
     console.log(`Command detected: "${command}"`);
@@ -174,24 +192,28 @@ async function processMessage(message, value) {
     if (command === 'stop' || command === 'unsubscribe') {
       console.log('Processing STOP command');
       await handleOptOut(fromNumber);
+      await supabase.from('messages').update({ processed: true }).eq('id', messageRecord.id);
       return;
     }
     
     if (command === 'start' || command === 'join') {
       console.log('Processing START command');
       await handleOptIn(fromNumber);
+      await supabase.from('messages').update({ processed: true }).eq('id', messageRecord.id);
       return;
     }
     
     if (command === 'help') {
       console.log('Processing HELP command');
       await handleHelp(fromNumber);
+      await supabase.from('messages').update({ processed: true }).eq('id', messageRecord.id);
       return;
     }
     
     if (command === 'regions') {
       console.log('Processing REGIONS command');
       await handleRegions(fromNumber);
+      await supabase.from('messages').update({ processed: true }).eq('id', messageRecord.id);
       return;
     }
     
@@ -199,6 +221,7 @@ async function processMessage(message, value) {
     if (isRegionSelection(command)) {
       console.log('Processing region selection');
       await handleRegionSelection(fromNumber, command);
+      await supabase.from('messages').update({ processed: true }).eq('id', messageRecord.id);
       return;
     }
     
@@ -206,11 +229,12 @@ async function processMessage(message, value) {
     if (isCasualMessage(command)) {
       console.log('Processing casual chat');
       await handleCasualChat(fromNumber);
+      await supabase.from('messages').update({ processed: true }).eq('id', messageRecord.id);
       return;
     }
 
-    // Auto-create moment from meaningful messages (including media with captions)
-    if (content && content.length > 5 && !isCommand(content) && !isCasualMessage(command)) {
+    // Auto-create moment from ALL non-command messages (including media)
+    if (!isCommand(content) && !isCasualMessage(command)) {
       console.log('Creating moment from message');
       try {
         // For media without captions, create descriptive content
@@ -264,23 +288,6 @@ async function processMessage(message, value) {
     function generateTitle(text) {
       const words = text.split(' ').slice(0, 8);
       return words.join(' ') + (text.split(' ').length > 8 ? '...' : '');
-    }
-    // Store message in database and update 24-hour messaging window
-    const { data: messageRecord, error: insertError } = await supabase
-      .from('messages')
-      .insert({
-        whatsapp_id: message.id,
-        from_number: fromNumber,
-        message_type: messageType,
-        content,
-        processed: false
-      })
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error('Message insert error:', insertError);
-      return;
     }
 
     // Call Supabase MCP function for message analysis
