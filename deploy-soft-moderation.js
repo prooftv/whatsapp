@@ -1,97 +1,117 @@
 #!/usr/bin/env node
 
-import { createClient } from '@supabase/supabase-js';
-import { readFileSync } from 'fs';
-import dotenv from 'dotenv';
-dotenv.config();
+import { supabase } from './config/supabase.js';
+import fs from 'fs';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
-
-async function deploySoftModeration() {
-  console.log('🚀 Deploying Soft Moderation Functions\n');
+async function deployFunction() {
+  console.log('📦 Deploying updated soft-moderation function...');
   
   try {
     // Read the SQL file
-    const sqlContent = readFileSync('/workspaces/whatsapp/supabase/soft-moderation-fixed.sql', 'utf8');
+    const sqlContent = fs.readFileSync('./supabase/soft-moderation-final.sql', 'utf8');
     
-    // Split into individual statements
-    const statements = sqlContent
-      .split(';')
-      .map(s => s.trim())
-      .filter(s => s.length > 0 && !s.startsWith('--'));
+    // Execute the SQL to update the function
+    const { data, error } = await supabase.rpc('exec_sql', {
+      sql_query: sqlContent
+    });
     
-    console.log(`📝 Found ${statements.length} SQL statements to execute\n`);
-    
-    // Execute each statement
-    for (let i = 0; i < statements.length; i++) {
-      const statement = statements[i] + ';';
-      console.log(`${i + 1}/${statements.length} Executing statement...`);
+    if (error) {
+      console.error('❌ Deployment error:', error);
       
-      try {
-        const { error } = await supabase.rpc('exec_sql', { sql: statement });
-        
-        if (error) {
-          // Try alternative method
-          const { error: altError } = await supabase
-            .from('_supabase_admin')
-            .select('*')
-            .limit(0); // This will fail but might give us access
+      // Try alternative approach - execute parts manually
+      console.log('🔄 Trying manual function update...');
+      
+      const updateFunctionSQL = `
+        CREATE OR REPLACE FUNCTION auto_approve_message_to_moment(p_message_id UUID)
+        RETURNS BOOLEAN
+        LANGUAGE plpgsql
+        SECURITY DEFINER
+        AS $$
+        DECLARE
+          message_record RECORD;
+          advisory_record RECORD;
+          moment_id UUID;
+          auto_title TEXT;
+          auto_region TEXT;
+          auto_category TEXT;
+        BEGIN
+          SELECT * INTO message_record FROM messages WHERE id = p_message_id;
+          IF NOT FOUND THEN
+            RAISE EXCEPTION 'Message not found: %', p_message_id;
+          END IF;
           
-          console.log('⚠️ Direct SQL execution not available, trying manual approach...');
-          break;
-        }
-        
-        console.log('✅ Statement executed successfully');
-      } catch (err) {
-        console.log('⚠️ Statement execution method not available:', err.message);
-        break;
-      }
-    }
-    
-    // Test if functions were created
-    console.log('\n🧪 Testing function deployment...');
-    
-    try {
-      const { data, error } = await supabase.rpc('auto_approve_message_to_moment', {
-        p_message_id: '00000000-0000-0000-0000-000000000000'
+          SELECT * INTO advisory_record 
+          FROM advisories 
+          WHERE message_id = p_message_id 
+          ORDER BY created_at DESC 
+          LIMIT 1;
+          
+          IF advisory_record.escalation_suggested = true THEN
+            RETURN false;
+          END IF;
+          
+          IF advisory_record.confidence < 0.5 THEN
+            RETURN false;
+          END IF;
+          
+          auto_title := CASE
+            WHEN LENGTH(message_record.content) <= 50 THEN message_record.content
+            WHEN POSITION('.' IN message_record.content) > 0 AND POSITION('.' IN message_record.content) <= 80 THEN
+              SUBSTRING(message_record.content FROM 1 FOR POSITION('.' IN message_record.content) - 1)
+            ELSE
+              SUBSTRING(message_record.content FROM 1 FOR 50) || '...'
+          END;
+          
+          auto_region := 'National';
+          auto_category := 'Community';
+          
+          INSERT INTO moments (
+            title, content, region, category, language, content_source, status, created_by, media_urls
+          ) VALUES (
+            auto_title, message_record.content, auto_region, auto_category,
+            COALESCE(message_record.language_detected, 'eng'), 'community', 'draft', 'auto_moderation',
+            CASE WHEN message_record.media_url IS NOT NULL THEN ARRAY[message_record.media_url] ELSE ARRAY[]::TEXT[] END
+          ) RETURNING id INTO moment_id;
+          
+          UPDATE messages SET processed = true WHERE id = p_message_id;
+          
+          RETURN true;
+        END;
+        $$;
+      `;
+      
+      const { error: funcError } = await supabase.rpc('exec_sql', {
+        sql_query: updateFunctionSQL
       });
       
-      if (error && error.message.includes('Message not found')) {
-        console.log('✅ auto_approve_message_to_moment function is working!');
-      } else if (error) {
-        console.log('❌ Function test failed:', error.message);
+      if (funcError) {
+        console.error('❌ Function update failed:', funcError);
+      } else {
+        console.log('✅ Function updated successfully');
       }
-    } catch (err) {
-      console.log('❌ Function not found:', err.message);
+    } else {
+      console.log('✅ Soft-moderation function deployed successfully');
     }
     
-    try {
-      const { data, error } = await supabase.rpc('process_auto_approval_queue');
-      
-      if (error) {
-        console.log('❌ process_auto_approval_queue test failed:', error.message);
-      } else {
-        console.log('✅ process_auto_approval_queue function is working! Processed:', data, 'messages');
-      }
-    } catch (err) {
-      console.log('❌ Batch function not found:', err.message);
+    // Test the function
+    console.log('🧪 Testing auto-approval process...');
+    const { data: result, error: testError } = await supabase.rpc('process_auto_approval_queue');
+    
+    if (testError) {
+      console.error('❌ Test error:', testError);
+    } else {
+      console.log(`✅ Processed ${result || 0} messages`);
     }
     
   } catch (error) {
-    console.log('❌ Deployment failed:', error.message);
+    console.error('❌ Deployment failed:', error);
   }
 }
 
-// Also provide manual SQL for copy-paste
-console.log('📋 MANUAL DEPLOYMENT INSTRUCTIONS:');
-console.log('==================================');
-console.log('If automatic deployment fails, copy and paste this SQL into your Supabase SQL Editor:\n');
-
-const sqlContent = readFileSync('/workspaces/whatsapp/supabase/soft-moderation-fixed.sql', 'utf8');
-console.log(sqlContent);
-console.log('\n==================================\n');
-
-deploySoftModeration().catch(console.error);
+deployFunction().then(() => {
+  console.log('🏁 Deployment completed');
+  process.exit(0);
+}).catch(error => {
+  console.error('💥 Deployment failed:', error);
+  process.exit(1);
+});
