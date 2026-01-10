@@ -75,7 +75,8 @@ BEGIN
     language,
     content_source,
     status,
-    created_by
+    created_by,
+    media_urls
   ) VALUES (
     auto_title,
     message_record.content,
@@ -84,7 +85,8 @@ BEGIN
     COALESCE(message_record.language_detected, 'eng'),
     'community',
     'draft',
-    'auto_moderation'
+    'auto_moderation',
+    CASE WHEN message_record.media_url IS NOT NULL THEN ARRAY[message_record.media_url] ELSE ARRAY[]::TEXT[] END
   ) RETURNING id INTO moment_id;
   
   -- Mark message as processed

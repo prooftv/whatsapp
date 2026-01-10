@@ -131,12 +131,90 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
+// Download and store WhatsApp media
+async function downloadAndStoreMedia(mediaId, messageType) {
+  try {
+    // Get media URL from WhatsApp
+    const mediaResponse = await fetch(
+      `https://graph.facebook.com/v18.0/${mediaId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`
+        }
+      }
+    );
+    
+    if (!mediaResponse.ok) {
+      throw new Error(`Failed to get media URL: ${mediaResponse.status}`);
+    }
+    
+    const mediaData = await mediaResponse.json();
+    const mediaUrl = mediaData.url;
+    
+    // Download media file
+    const fileResponse = await fetch(mediaUrl, {
+      headers: {
+        'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`
+      }
+    });
+    
+    if (!fileResponse.ok) {
+      throw new Error(`Failed to download media: ${fileResponse.status}`);
+    }
+    
+    const fileBuffer = await fileResponse.arrayBuffer();
+    const buffer = Buffer.from(fileBuffer);
+    
+    // Determine file extension and bucket
+    let fileExt = 'bin';
+    let bucket = 'documents';
+    const contentType = fileResponse.headers.get('content-type') || '';
+    
+    if (messageType === 'image' || contentType.startsWith('image/')) {
+      fileExt = contentType.split('/')[1] || 'jpg';
+      bucket = 'images';
+    } else if (messageType === 'video' || contentType.startsWith('video/')) {
+      fileExt = contentType.split('/')[1] || 'mp4';
+      bucket = 'videos';
+    } else if (messageType === 'audio' || contentType.startsWith('audio/')) {
+      fileExt = contentType.split('/')[1] || 'mp3';
+      bucket = 'audio';
+    }
+    
+    // Generate unique filename
+    const fileName = `community/${Date.now()}_${mediaId}.${fileExt}`;
+    
+    // Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(fileName, buffer, {
+        contentType: contentType || 'application/octet-stream'
+      });
+    
+    if (uploadError) {
+      throw new Error(`Storage upload failed: ${uploadError.message}`);
+    }
+    
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(fileName);
+    
+    return urlData.publicUrl;
+    
+  } catch (error) {
+    console.error('Media download/storage error:', error);
+    return null;
+  }
+}
+
 async function processMessage(message, value) {
   try {
     const fromNumber = message.from;
     const messageType = message.type;
     let content = '';
     let mediaId = null;
+    let mediaUrls = [];
 
     console.log(`Processing message from ${fromNumber}, type: ${messageType}`);
 
@@ -165,7 +243,26 @@ async function processMessage(message, value) {
         content = `[${messageType} message]`;
     }
 
-    console.log(`Message content: "${content}"`);
+    // Download and store media if present
+    if (mediaId) {
+      try {
+        console.log(`📥 Attempting to download media: ${mediaId}`);
+        const mediaUrl = await downloadAndStoreMedia(mediaId, messageType);
+        if (mediaUrl) {
+          mediaUrls = [mediaUrl];
+          console.log(`✅ Media stored: ${mediaUrl}`);
+        } else {
+          console.log(`⚠️ Media download failed, storing media_id for later processing`);
+        }
+      } catch (mediaError) {
+        console.error('Media download error:', mediaError);
+        console.log(`⚠️ Will store media_id for manual processing: ${mediaId}`);
+      }
+    }
+
+    console.log(`Message content: "${content}"`);    
+    console.log(`Media ID: ${mediaId || 'none'}`);
+    console.log(`Media URLs: ${JSON.stringify(mediaUrls)}`);
 
     // Store message in database FIRST
     const { data: messageRecord, error: insertError } = await supabase
@@ -175,6 +272,8 @@ async function processMessage(message, value) {
         from_number: fromNumber,
         message_type: messageType,
         content,
+        media_url: mediaUrls[0] || null,
+        media_id: mediaId,
         processed: false
       })
       .select()
@@ -183,6 +282,11 @@ async function processMessage(message, value) {
     if (insertError) {
       console.error('Message insert error:', insertError);
       return;
+    }
+    
+    console.log(`✅ Message stored with ID: ${messageRecord.id}`);
+    if (mediaUrls.length > 0) {
+      console.log(`📎 Media attached: ${mediaUrls[0]}`);
     }
 
     // Handle commands
@@ -1425,7 +1529,93 @@ app.put('/admin/sponsors/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Delete sponsor endpoint - FIXED with proper Supabase integration
+// Manual process messages with media endpoint
+app.post('/admin/process-media-messages', authenticateAdmin, async (req, res) => {
+  try {
+    // Find messages with media that haven't been converted to moments
+    const { data: messagesWithMedia } = await supabase
+      .from('messages')
+      .select(`
+        id,
+        content,
+        media_url,
+        media_id,
+        message_type,
+        from_number,
+        created_at
+      `)
+      .or('media_url.not.is.null,media_id.not.is.null')
+      .eq('processed', false)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    
+    let processedCount = 0;
+    const results = [];
+    
+    for (const message of messagesWithMedia || []) {
+      try {
+        // Create moment from message with media
+        const title = message.content?.substring(0, 50) || `${message.message_type} from community`;
+        const content = message.content || `[${message.message_type} message]`;
+        
+        const { data: moment, error: momentError } = await supabase
+          .from('moments')
+          .insert({
+            title,
+            content,
+            region: 'National',
+            category: 'Community',
+            content_source: 'community',
+            status: 'draft',
+            created_by: 'media_processor',
+            media_urls: message.media_url ? [message.media_url] : []
+          })
+          .select()
+          .single();
+        
+        if (!momentError) {
+          // Mark message as processed
+          await supabase
+            .from('messages')
+            .update({ processed: true })
+            .eq('id', message.id);
+          
+          processedCount++;
+          results.push({
+            message_id: message.id,
+            moment_id: moment.id,
+            title,
+            media_url: message.media_url,
+            status: 'success'
+          });
+        } else {
+          results.push({
+            message_id: message.id,
+            error: momentError.message,
+            status: 'failed'
+          });
+        }
+      } catch (error) {
+        results.push({
+          message_id: message.id,
+          error: error.message,
+          status: 'failed'
+        });
+      }
+    }
+    
+    res.json({
+      success: true,
+      processed_count: processedCount,
+      total_found: messagesWithMedia?.length || 0,
+      results
+    });
+    
+  } catch (error) {
+    console.error('Process media messages error:', error);
+    res.status(500).json({ error: 'Failed to process media messages' });
+  }
+});
 app.delete('/admin/sponsors/:id', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
